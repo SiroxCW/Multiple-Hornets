@@ -2,7 +2,6 @@ using BepInEx;
 
 namespace MultipleHornetsMod;
 
-// TODO - adjust the plugin guid as needed
 [BepInAutoPlugin(id: "io.github.siroxcw.multiplehornetsmod")]
 public partial class MultipleHornetsModPlugin : BaseUnityPlugin
 {
