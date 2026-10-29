@@ -21,6 +21,10 @@ internal sealed class Overlay : MonoBehaviour
     private const float MessageFade = 2f;
     private const string ChatControl = "mh_chat";
 
+    private static readonly Color ScreenDim = new(0f, 0f, 0f, 0.55f);
+    private static readonly Color PanelColor = new(0.05f, 0.04f, 0.06f, 0.94f);
+    private static readonly Color PanelBorder = new(0.55f, 0.32f, 0.32f, 0.9f);
+
     private readonly HashSet<KeyCode> _heldKeys = new();
 
     private bool _menuOpen;
@@ -216,7 +220,7 @@ internal sealed class Overlay : MonoBehaviour
             }
         }
 
-        GUI.Box(new Rect(14f, VirtualHeight - 88f, 912f, 40f), GUIContent.none, styles.Panel);
+        DrawPanel(new Rect(14f, VirtualHeight - 88f, 912f, 40f));
         GUI.SetNextControlName(ChatControl);
         _chatText = GUI.TextField(new Rect(20f, VirtualHeight - 84f, 900f, 32f), _chatText, Protocol.MaxChatLength, styles.TextField);
 
@@ -243,6 +247,8 @@ internal sealed class Overlay : MonoBehaviour
         const float panelWidth = 560f;
         var rect = new Rect((width - panelWidth) / 2f, 90f, panelWidth, 860f);
 
+        DrawRect(new Rect(0f, 0f, width, VirtualHeight), ScreenDim);
+        DrawPanel(rect);
         GUILayout.BeginArea(rect, styles.Panel);
         _menuScroll = GUILayout.BeginScrollView(_menuScroll);
 
@@ -411,6 +417,26 @@ internal sealed class Overlay : MonoBehaviour
         return Session.IsConnecting ? "Connecting..." : "Not connected.";
     }
 
+    private static void DrawPanel(Rect rect)
+    {
+        DrawRect(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, rect.height + 4f), PanelBorder);
+        DrawRect(rect, PanelColor);
+    }
+
+    /// <summary>
+    /// Tints Unity's built-in white texture. A texture made with <c>new Texture2D</c> would be destroyed by the
+    /// game's <c>Resources.UnloadUnusedAssets</c> on scene changes, since a GUIStyle does not keep it alive.
+    /// </summary>
+    private static void DrawRect(Rect rect, Color color)
+    {
+        if (Event.current.type != EventType.Repaint) return;
+
+        var previous = GUI.color;
+        GUI.color = color;
+        GUI.DrawTexture(rect, Texture2D.whiteTexture);
+        GUI.color = previous;
+    }
+
     private static void DrawShadowedLabel(Rect rect, string text, GUIStyle style, Color color)
     {
         var previous = GUI.color;
@@ -425,13 +451,8 @@ internal sealed class Overlay : MonoBehaviour
     {
         public Styles()
         {
-            var background = new Texture2D(1, 1);
-            background.SetPixel(0, 0, new Color(0.05f, 0.04f, 0.06f, 0.92f));
-            background.Apply();
-            DontDestroyOnLoad(background);
-
-            Panel = new GUIStyle(GUI.skin.box) { padding = new RectOffset(18, 18, 14, 14) };
-            Panel.normal.background = background;
+            // Only the padding, the background is drawn by DrawPanel.
+            Panel = new GUIStyle { padding = new RectOffset(18, 18, 14, 14) };
 
             Title = new GUIStyle(GUI.skin.label) { fontSize = 30, fontStyle = FontStyle.Bold };
             Title.normal.textColor = new Color(0.95f, 0.85f, 0.85f);
