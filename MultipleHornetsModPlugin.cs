@@ -3,6 +3,7 @@ using BepInEx;
 using MultipleHornetsMod.Core;
 using MultipleHornetsMod.Game;
 using MultipleHornetsMod.Game.Players;
+using MultipleHornetsMod.Sync.Enemies;
 using MultipleHornetsMod.Sync.World;
 using MultipleHornetsMod.UI;
 using UnityEngine;
@@ -20,6 +21,8 @@ public partial class MultipleHornetsModPlugin : BaseUnityPlugin
         PlayerSync.Init();
         WorldServer.Init();
         WorldSync.Init();
+        EntityServer.Init();
+        EnemySync.Init();
 
         Patching.PatchAll(Id);
 
@@ -45,6 +48,7 @@ internal sealed class Runner : MonoBehaviour
             PlayerSync.Update();
             WorldSync.Update();
             WorldServer.Current?.Update();
+            EnemySync.Update();
         }
         catch (Exception e)
         {
@@ -57,6 +61,7 @@ internal sealed class Runner : MonoBehaviour
         try
         {
             PlayerSync.LateUpdate();
+            EnemySync.LateUpdate();
         }
         catch (Exception e)
         {

@@ -237,15 +237,19 @@ internal static class AnimatorPlayPatch
     private static void Prefix(tk2dSpriteAnimator __instance, tk2dSpriteAnimationClip clip, float clipStartTime,
         float overrideFps)
     {
-        // Runs for every animator in the game: cheap reference checks first.
-        if (clip == null || !ReferenceEquals(__instance, GameState.HeroAnimator)) return;
+        // Runs for every animator in the game: cheap checks first.
+        if (clip == null) return;
+
+        var isHero = ReferenceEquals(__instance, GameState.HeroAnimator);
+        if (!isHero && !Session.IsConnected) return;
 
         try
         {
             // Playing the clip that is already running from the start is a no-op in the original method.
             if (clipStartTime == 0f && __instance.IsPlaying(clip)) return;
 
-            PlayerSync.OnHeroAnimatorPlay(clip, clipStartTime, overrideFps);
+            if (isHero) PlayerSync.OnHeroAnimatorPlay(clip, clipStartTime, overrideFps);
+            else Sync.Enemies.EnemySync.OnAnimatorPlay(__instance, clip);
         }
         catch (Exception e)
         {

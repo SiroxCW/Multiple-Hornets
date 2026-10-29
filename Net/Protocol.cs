@@ -51,6 +51,16 @@ internal enum Msg : byte
     // Progression sync
     WorldChanges = 30,
     WorldCatchUpDone = 31,
+
+    // Enemy sync
+    SceneHost = 40,
+    EntityOwner = 41,
+    EntityEvents = 42,
+    EntityTransforms = 43,
+    EntityHit = 44,
+    EntityTransfer = 45,
+    EntityClaim = 46,
+    EntitySnapshot = 47,
 }
 
 internal static class NetExtensions

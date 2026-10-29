@@ -4,6 +4,8 @@ using MultipleHornetsMod.Core;
 using MultipleHornetsMod.Game;
 using MultipleHornetsMod.Game.Players;
 using MultipleHornetsMod.Net;
+using MultipleHornetsMod.Sync.Enemies;
+using MultipleHornetsMod.Sync.World;
 using UnityEngine;
 
 namespace MultipleHornetsMod.UI;
@@ -320,6 +322,17 @@ internal sealed class Overlay : MonoBehaviour
                 var same = player.Scene.Length > 0 && player.Scene == GameState.CurrentScene ? "  (here)" : "";
                 GUILayout.Label($"{player.Name}  -  {where}{same}", styles.Label);
             }
+        }
+
+        if (Session.IsConnected && GameState.InGameplay)
+        {
+            GUILayout.Space(6f);
+            if (Session.Settings.SyncEnemies)
+            {
+                GUILayout.Label($"Enemies in this room: {EnemySync.EntityCount} (you control {EnemySync.OwnedCount})", styles.Hint);
+            }
+
+            GUILayout.Label(WorldSync.IsActive ? "Progression sync: active" : "Progression sync: waiting for gameplay", styles.Hint);
         }
 
         GUILayout.Space(8f);

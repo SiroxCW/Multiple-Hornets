@@ -20,6 +20,9 @@ internal sealed class RemoteHornet : MonoBehaviour
     /// <summary>True when the player is drawn in the current room.</summary>
     public bool IsShown => gameObject.activeSelf && _renderer.enabled;
 
+    /// <summary>True when the player is in the current room and its position is known.</summary>
+    public bool HasPosition => gameObject.activeSelf && _interpolator.HasData;
+
     public static RemoteHornet? Create(PlayerInfo player)
     {
         var hero = HeroController.SilentInstance;
