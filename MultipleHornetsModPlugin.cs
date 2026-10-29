@@ -3,6 +3,7 @@ using BepInEx;
 using MultipleHornetsMod.Core;
 using MultipleHornetsMod.Game;
 using MultipleHornetsMod.Game.Players;
+using MultipleHornetsMod.Sync.World;
 using MultipleHornetsMod.UI;
 using UnityEngine;
 
@@ -17,6 +18,8 @@ public partial class MultipleHornetsModPlugin : BaseUnityPlugin
         ModConfig.Init(Config);
 
         PlayerSync.Init();
+        WorldServer.Init();
+        WorldSync.Init();
 
         Patching.PatchAll(Id);
 
@@ -40,6 +43,8 @@ internal sealed class Runner : MonoBehaviour
             GameState.Refresh();
             Session.Update();
             PlayerSync.Update();
+            WorldSync.Update();
+            WorldServer.Current?.Update();
         }
         catch (Exception e)
         {

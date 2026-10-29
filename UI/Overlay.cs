@@ -35,6 +35,7 @@ internal sealed class Overlay : MonoBehaviour
     private string _password = "";
     private string _hostPort = "";
     private string _hostPassword = "";
+    private string _worldName = "";
 
     private Styles? _styles;
 
@@ -44,6 +45,7 @@ internal sealed class Overlay : MonoBehaviour
         _address = ModConfig.JoinAddress;
         _port = ModConfig.JoinPort.ToString();
         _hostPort = ModConfig.HostPort.ToString();
+        _worldName = ModConfig.WorldName;
     }
 
     private void Update()
@@ -285,6 +287,8 @@ internal sealed class Overlay : MonoBehaviour
         GUILayout.Label("Host a game", styles.Header);
         Field("Port", ref _hostPort, 5, styles);
         Field("Password", ref _hostPassword, 32, styles);
+        Field("World", ref _worldName, 32, styles);
+        GUILayout.Label("Shared progress is remembered per world name. Pick a new name for a new playthrough.", styles.Hint);
         GUILayout.Label("Other players need your IP and an open (forwarded) UDP port, or a VPN like Tailscale/ZeroTier.", styles.Hint);
         if (GUILayout.Button("Host", styles.Button))
         {
@@ -365,6 +369,8 @@ internal sealed class Overlay : MonoBehaviour
         ModConfig.JoinAddress = _address.Trim();
         if (int.TryParse(_port, out var port)) ModConfig.JoinPort = port;
         if (int.TryParse(_hostPort, out var hostPort)) ModConfig.HostPort = hostPort;
+        var world = _worldName.Trim();
+        if (world.Length > 0) ModConfig.WorldName = world;
     }
 
     private static string StatusText()

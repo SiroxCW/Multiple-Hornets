@@ -47,6 +47,10 @@ internal enum Msg : byte
     PlayerState = 11,
     PlayerAnim = 12,
     Chat = 13,
+
+    // Progression sync
+    WorldChanges = 30,
+    WorldCatchUpDone = 31,
 }
 
 internal static class NetExtensions

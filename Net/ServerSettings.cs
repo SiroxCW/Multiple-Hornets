@@ -27,11 +27,8 @@ internal sealed class ServerSettings
     [Setting("Sync quests", "Accepted and completed wishes are shared.")]
     public bool SyncQuests = true;
 
-    [Setting("Sync maps", "Maps, map pins and markers are shared.")]
+    [Setting("Sync maps", "Maps, map pins, markers and explored rooms are shared.")]
     public bool SyncMaps = true;
-
-    [Setting("Share rosaries/shards", "Currency picked up from the world and chests is shared. Enemy drops stay personal.")]
-    public bool SyncCurrency = false;
 
     private static readonly List<FieldInfo> Fields = new();
 
