@@ -12,8 +12,12 @@ using MultipleHornetsMod.Net;
 namespace MultipleHornetsMod.Sync.World;
 
 /// <summary>
-/// Server side of the progression sync. Keeps the merged progression of everyone who played in this world,
-/// forwards changes to the other players and stores the world on disk so it survives restarts.
+/// Server side of the progression sync. Keeps the merged progression of everyone in the shared playthrough,
+/// forwards changes to the other players and stores it on disk so it survives restarts.
+/// <para>
+/// The playthrough is the one of the save the host loaded (see <c>PlaythroughId</c>). Until the host has
+/// loaded a save there is none, and nothing is shared.
+/// </para>
 /// </summary>
 internal sealed class WorldServer
 {
@@ -24,15 +28,15 @@ internal sealed class WorldServer
 
     private readonly GameServer _server;
     private readonly Dictionary<string, WorldEntry> _state = new();
-    private readonly string _filePath;
+    private readonly string _directory;
+    private string _filePath = "";
     private bool _dirty;
     private long _dirtySince;
 
-    internal WorldServer(GameServer server, string worldName, string? directory = null)
+    internal WorldServer(GameServer server, string? directory = null)
     {
         _server = server;
-        _filePath = Path.Combine(directory ?? Path.Combine(DataPaths.Root, "worlds"), SafeFileName(worldName) + ".txt");
-        Load();
+        _directory = directory ?? Path.Combine(DataPaths.Root, "playthroughs");
 
         server.Register(Msg.WorldChanges, OnWorldChanges);
         server.PlayerJoined += SendFullState;
@@ -40,13 +44,16 @@ internal sealed class WorldServer
 
     public static WorldServer? Current { get; private set; }
 
+    /// <summary>Id of the shared playthrough, empty until the host has loaded a save.</summary>
+    public string Playthrough { get; private set; } = "";
+
     public bool TryGet(string key, out WorldEntry entry) => _state.TryGetValue(key, out entry);
 
     public int EntryCount => _state.Count;
 
     public static void Init()
     {
-        Session.RegisterServerModule(server => Current = new WorldServer(server, ModConfig.WorldName));
+        Session.RegisterServerModule(server => Current = new WorldServer(server));
         Session.Disconnected += () =>
         {
             Current?.SaveNow();
@@ -59,9 +66,24 @@ internal sealed class WorldServer
         if (_dirty && Clock.ElapsedMilliseconds - _dirtySince > SaveDelayMs) SaveNow();
     }
 
+    /// <summary>Switches to the playthrough of the save the host loaded. Everyone gets its state.</summary>
+    public void Open(string id)
+    {
+        if (id == Playthrough || !IsValidId(id)) return;
+
+        SaveNow();
+        _state.Clear();
+        Playthrough = id;
+        _filePath = Path.Combine(_directory, id + ".txt");
+        Load();
+        Log.Info($"Shared playthrough {id} opened with {_state.Count} progression entries.");
+
+        foreach (var player in _server.Players) SendFullState(player);
+    }
+
     public void SaveNow()
     {
-        if (!_dirty) return;
+        if (!_dirty || _filePath.Length == 0) return;
         _dirty = false;
 
         try
@@ -83,7 +105,7 @@ internal sealed class WorldServer
         }
         catch (Exception e)
         {
-            Log.Warn($"Could not save world: {e.Message}");
+            Log.Warn($"Could not save the shared playthrough: {e.Message}");
         }
     }
 
@@ -102,16 +124,20 @@ internal sealed class WorldServer
                 _state[key] = new WorldEntry(key, value, Unescape(parts[3]), (WorldCategory)category);
             }
 
-            Log.Info($"Loaded world with {_state.Count} progression entries from {_filePath}.");
         }
         catch (Exception e)
         {
-            Log.Warn($"Could not load world: {e.Message}");
+            Log.Warn($"Could not load the shared playthrough: {e.Message}");
         }
     }
 
     private void SendFullState(ServerPlayer player)
     {
+        var header = GameServer.Begin(Msg.WorldPlaythrough);
+        header.Put(Playthrough);
+        _server.Send(player, header, Protocol.ChannelWorld, DeliveryMethod.ReliableOrdered);
+        if (Playthrough.Length == 0) return;
+
         var entries = _state.Values.ToList();
         for (var start = 0; start < entries.Count; start += BatchSize)
         {
@@ -128,6 +154,10 @@ internal sealed class WorldServer
 
     private void OnWorldChanges(ServerPlayer player, NetPacketReader reader)
     {
+        // Changes sent just before the host switched saves belong to the previous playthrough.
+        var playthrough = reader.GetSafeString(64);
+        if (Playthrough.Length == 0 || playthrough != Playthrough) return;
+
         var count = reader.GetUShort();
         var accepted = new List<WorldEntry>(count);
 
@@ -203,10 +233,7 @@ internal sealed class WorldServer
         return builder.ToString();
     }
 
-    private static string SafeFileName(string name)
-    {
-        var invalid = Path.GetInvalidFileNameChars();
-        var clean = new string(name.Where(c => !invalid.Contains(c)).ToArray()).Trim();
-        return clean.Length == 0 ? "default" : clean;
-    }
+    /// <summary>Ids become file names, so only plain characters are accepted.</summary>
+    private static bool IsValidId(string id) =>
+        id.Length is > 0 and <= 64 && id.All(c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-');
 }

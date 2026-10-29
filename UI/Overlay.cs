@@ -42,7 +42,6 @@ internal sealed class Overlay : MonoBehaviour
     private string _password = "";
     private string _hostPort = "";
     private string _hostPassword = "";
-    private string _worldName = "";
 
     private Styles? _styles;
 
@@ -52,7 +51,6 @@ internal sealed class Overlay : MonoBehaviour
         _address = ModConfig.JoinAddress;
         _port = ModConfig.JoinPort.ToString();
         _hostPort = ModConfig.HostPort.ToString();
-        _worldName = ModConfig.WorldName;
     }
 
     private void Update()
@@ -308,8 +306,7 @@ internal sealed class Overlay : MonoBehaviour
         GUILayout.Label("Host a game", styles.Header);
         Field("Port", ref _hostPort, 5, styles);
         Field("Password", ref _hostPassword, 32, styles);
-        Field("World", ref _worldName, 32, styles);
-        GUILayout.Label("Shared progress is remembered per world name. Pick a new name for a new playthrough.", styles.Hint);
+        GUILayout.Label("The save you load decides the shared playthrough: a new game starts a new one, an existing save continues its own.", styles.Hint);
         GUILayout.Label("Other players need your IP and an open (forwarded) UDP port, or a VPN like Tailscale/ZeroTier.", styles.Hint);
         if (GUILayout.Button("Host", styles.Button))
         {
@@ -351,7 +348,7 @@ internal sealed class Overlay : MonoBehaviour
                 GUILayout.Label($"Enemies in this room: {EnemySync.EntityCount} (you control {EnemySync.OwnedCount})", styles.Hint);
             }
 
-            GUILayout.Label(WorldSync.IsActive ? "Progression sync: active" : "Progression sync: waiting for gameplay", styles.Hint);
+            DrawProgressionStatus(styles);
         }
 
         GUILayout.Space(8f);
@@ -386,6 +383,33 @@ internal sealed class Overlay : MonoBehaviour
         }
     }
 
+    private static void DrawProgressionStatus(Styles styles)
+    {
+        switch (WorldSync.Status)
+        {
+            case SyncStatus.Active:
+                GUILayout.Label("Progression sync: active", styles.Hint);
+                break;
+            case SyncStatus.WaitingForHost:
+                GUILayout.Label("Progression sync: waiting for the host to load a save", styles.Hint);
+                break;
+            case SyncStatus.NotJoined:
+                GUILayout.Label("This save is not part of the shared playthrough yet.", styles.Warning);
+                GUILayout.Label(
+                    "Adding it shares its progress with everyone, and it gets everything the others already have. " +
+                    "This cannot be undone.", styles.Hint);
+                if (GUILayout.Button("Add this save to the playthrough", styles.Button)) WorldSync.JoinPlaythrough();
+                break;
+            case SyncStatus.OtherPlaythrough:
+                GUILayout.Label("This save belongs to a different co-op playthrough, so progression is not shared.", styles.Warning);
+                GUILayout.Label("Load a save from this playthrough or start a new game.", styles.Hint);
+                break;
+            default:
+                GUILayout.Label("Progression sync: starting...", styles.Hint);
+                break;
+        }
+    }
+
     private static void Field(string label, ref string value, int maxLength, Styles styles)
     {
         GUILayout.BeginHorizontal();
@@ -401,8 +425,6 @@ internal sealed class Overlay : MonoBehaviour
         ModConfig.JoinAddress = _address.Trim();
         if (int.TryParse(_port, out var port)) ModConfig.JoinPort = port;
         if (int.TryParse(_hostPort, out var hostPort)) ModConfig.HostPort = hostPort;
-        var world = _worldName.Trim();
-        if (world.Length > 0) ModConfig.WorldName = world;
     }
 
     private static string StatusText()

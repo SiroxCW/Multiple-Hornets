@@ -14,7 +14,6 @@ internal static class ModConfig
     private static ConfigEntry<int> _joinPort = null!;
     private static ConfigEntry<int> _hostPort = null!;
     private static ConfigEntry<int> _maxPlayers = null!;
-    private static ConfigEntry<string> _worldName = null!;
     private static ConfigEntry<KeyCode> _menuKey = null!;
     private static ConfigEntry<KeyCode> _chatKey = null!;
     private static ConfigEntry<bool> _showNames = null!;
@@ -31,8 +30,6 @@ internal static class ModConfig
         _joinPort = config.Bind("Connection", "LastPort", Protocol.DefaultPort, "Last port used to join a game.");
         _hostPort = config.Bind("Hosting", "Port", Protocol.DefaultPort, "UDP port used when hosting.");
         _maxPlayers = config.Bind("Hosting", "MaxPlayers", 8, "Maximum number of players when hosting.");
-        _worldName = config.Bind("Hosting", "WorldName", "default",
-            "Shared progression of a hosted game is remembered under this name. Use a new name for a new playthrough.");
 
         _debugLogging = config.Bind("Debug", "VerboseLogging", false, "Write detailed sync information to the log.");
     }
@@ -63,11 +60,6 @@ internal static class ModConfig
 
     public static int MaxPlayers => Mathf.Clamp(_maxPlayers.Value, 2, 32);
 
-    public static string WorldName
-    {
-        get => _worldName.Value;
-        set => _worldName.Value = value;
-    }
     public static KeyCode MenuKey => _menuKey.Value;
     public static KeyCode ChatKey => _chatKey.Value;
 

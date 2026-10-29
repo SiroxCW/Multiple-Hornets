@@ -84,9 +84,32 @@ internal sealed class WorldReporter
     public void ClearOutgoing() => _outgoing.Clear();
 }
 
+internal enum SyncStatus
+{
+    /// <summary>No save loaded.</summary>
+    NoSave,
+
+    /// <summary>The host has not loaded a save yet, so there is no playthrough to share.</summary>
+    WaitingForHost,
+
+    /// <summary>The loaded save was never part of a co-op playthrough and has progress of its own.</summary>
+    NotJoined,
+
+    /// <summary>The loaded save belongs to a different co-op playthrough.</summary>
+    OtherPlaythrough,
+
+    CatchingUp,
+    Active,
+}
+
 /// <summary>
-/// Client side of the progression sync. While a save is loaded it watches the local progression, sends
-/// changes to the server and applies the progression of the other players.
+/// Client side of the progression sync. While a save of the shared playthrough is loaded it watches the local
+/// progression, sends changes to the server and applies the progression of the other players.
+/// <para>
+/// Saves are tied to a playthrough by <see cref="PlaythroughId"/>, so a save is never mixed with the progress of
+/// another playthrough: the host's save decides the playthrough, a new save joins it, and a save of another
+/// playthrough is left alone.
+/// </para>
 /// </summary>
 internal static class WorldSync
 {
@@ -103,6 +126,7 @@ internal static class WorldSync
 
     private static bool _catchUpComplete;
     private static bool _active;
+    private static bool _joinRequested;
     private static float _pollTimer;
     private static string? _memoryCheckScene;
     private static bool _isMemoryScene;
@@ -116,7 +140,18 @@ internal static class WorldSync
     /// <summary>True while a save is loaded and progression is being synced.</summary>
     public static bool IsActive => _active;
 
+    public static SyncStatus Status { get; private set; }
+
+    /// <summary>Id of the playthrough the server shares, empty while the host has not loaded a save.</summary>
+    public static string ServerPlaythrough { get; private set; } = "";
+
     public static WorldReporter Changes => Reporter;
+
+    /// <summary>The player chose to add a save that has progress of its own to the shared playthrough.</summary>
+    public static void JoinPlaythrough()
+    {
+        if (Status == SyncStatus.NotJoined) _joinRequested = true;
+    }
 
     public static void Init()
     {
@@ -128,6 +163,7 @@ internal static class WorldSync
         Domains.Add(new MapDomain());
         Domains.Add(SceneDomain.Instance);
 
+        Session.RegisterHandler(Msg.WorldPlaythrough, OnPlaythrough);
         Session.RegisterHandler(Msg.WorldChanges, OnWorldChanges);
         Session.RegisterHandler(Msg.WorldCatchUpDone, _ => _catchUpComplete = true);
         Session.Connected += Reset;
@@ -140,11 +176,12 @@ internal static class WorldSync
 
         if (!CanSyncNow(out var inGame))
         {
-            if (!inGame && _active)
+            if (!inGame)
             {
-                // Back in the menu: the next loaded save gets a fresh baseline.
-                _active = false;
-                Reporter.Clear();
+                // Back in the menu: the next loaded save is checked again and gets a fresh baseline.
+                if (_active) Deactivate();
+                _joinRequested = false;
+                SetStatus(SyncStatus.NoSave);
             }
 
             return;
@@ -152,7 +189,8 @@ internal static class WorldSync
 
         if (!_active)
         {
-            if (!_catchUpComplete) return;
+            SetStatus(CheckSave());
+            if (Status != SyncStatus.Active) return;
             Activate();
         }
 
@@ -172,9 +210,86 @@ internal static class WorldSync
     {
         _active = false;
         _catchUpComplete = false;
+        _joinRequested = false;
+        ServerPlaythrough = "";
+        Status = SyncStatus.NoSave;
         Reporter.Clear();
         Pending.Clear();
         Mirror.Clear();
+    }
+
+    private static void Deactivate()
+    {
+        _active = false;
+        Reporter.Clear();
+        Pending.Clear();
+    }
+
+    /// <summary>Decides whether the loaded save may share progression with the server's playthrough.</summary>
+    private static SyncStatus CheckSave()
+    {
+        var saveId = PlaythroughId.Read();
+
+        if (Session.IsHost)
+        {
+            if (saveId == null)
+            {
+                saveId = PlaythroughId.Create();
+                PlaythroughId.Write(saveId);
+                ChatLog.AddProgress("This save starts a new shared playthrough.");
+            }
+
+            // The server shares the playthrough of the host's save; its answer arrives like for everyone else.
+            WorldServer.Current?.Open(saveId);
+            return saveId == ServerPlaythrough && _catchUpComplete ? SyncStatus.Active : SyncStatus.CatchingUp;
+        }
+
+        if (ServerPlaythrough.Length == 0) return SyncStatus.WaitingForHost;
+
+        if (saveId == null)
+        {
+            // A new save joins on its own, a save with progress of its own only when the player says so.
+            if (!_joinRequested && !PlaythroughId.IsFreshSave()) return SyncStatus.NotJoined;
+
+            saveId = ServerPlaythrough;
+            PlaythroughId.Write(saveId);
+            _joinRequested = false;
+            ChatLog.AddProgress("This save is now part of the shared playthrough.");
+        }
+
+        if (saveId != ServerPlaythrough) return SyncStatus.OtherPlaythrough;
+        return _catchUpComplete ? SyncStatus.Active : SyncStatus.CatchingUp;
+    }
+
+    private static void SetStatus(SyncStatus status)
+    {
+        if (status == Status) return;
+        Status = status;
+
+        var message = status switch
+        {
+            SyncStatus.WaitingForHost => "Progression is shared as soon as the host has loaded a save.",
+            SyncStatus.NotJoined => $"This save is not part of the shared playthrough yet. Press {ModConfig.MenuKey} to add it.",
+            SyncStatus.OtherPlaythrough =>
+                "This save belongs to a different co-op playthrough, so progression is not shared. " +
+                "Load a save from this playthrough or start a new game.",
+            _ => null,
+        };
+
+        if (message != null) ChatLog.AddSystem(message);
+    }
+
+    private static void OnPlaythrough(NetDataReader reader)
+    {
+        var id = reader.GetSafeString(64);
+        if (_active && id != ServerPlaythrough) ChatLog.AddSystem("The host switched to a different playthrough.");
+
+        // The full state of the playthrough follows, the loaded save is checked again once it is complete.
+        ServerPlaythrough = id;
+        _catchUpComplete = false;
+        Mirror.Clear();
+        if (_active) Deactivate();
+        Pending.Clear();
     }
 
     private static bool CanSyncNow(out bool inGame)
@@ -353,6 +468,7 @@ internal static class WorldSync
         {
             var count = Math.Min(SendBatchSize, outgoing.Count - start);
             var writer = GameClient.Begin(Msg.WorldChanges);
+            writer.Put(ServerPlaythrough);
             writer.Put((ushort)count);
             for (var i = start; i < start + count; i++) outgoing[i].Write(writer);
             Session.Client?.Send(writer, Protocol.ChannelWorld, DeliveryMethod.ReliableOrdered);

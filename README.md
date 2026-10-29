@@ -25,8 +25,9 @@ see each other, fight the same enemies and bosses, and share all progression.
 - Opened shortcuts, levers, gates, broken walls, unlocked Bellway and Ventrica stations, rescued fleas, bell shrines.
 - Defeated bosses and cleared arenas, accepted and completed wishes.
 - Maps, pins, markers and explored rooms.
-- Late joiners catch up: the host remembers the shared world, and everyone who joins later gets all of it.
+- Late joiners catch up: the host remembers the shared playthrough, and everyone who joins later gets all of it.
   Progress made by two players at the same time is merged, nothing gets lost or doubled.
+- Saves never get mixed up: every save remembers which co-op playthrough it belongs to (see below).
 - Enemy drops and repeatable shop purchases stay personal.
 
 ## Installation
@@ -43,11 +44,27 @@ Do **not** use it together with SSMP, BasicItemSync or BasicEnemySync. Multiple 
 3. **Host**: choose a port (default `26950`) and press *Host*. Other players need your IP address and the UDP port
    forwarded on your router, or a VPN such as Tailscale, ZeroTier or Radmin VPN.
 4. **Join**: enter the host's address and port and press *Join*.
-5. Load a save file. Fresh save files for everyone give the cleanest co-op playthrough; if you join with an
-   existing save, its progress is merged into the shared world.
+5. Load a save file. Everyone plays on their own save, the mod keeps them in sync.
 
 The host can choose what is synced in the menu while hosting (enemies, items, world, bosses, wishes, maps).
-Shared progress is stored under a *world* name; pick a new name for a new playthrough.
+
+### Playthroughs
+
+The save the host loads decides the shared playthrough. Every save that takes part in a playthrough remembers
+it (a small hidden entry in the save file), so saves of different playthroughs can never be mixed:
+
+- Host starts a new game: a new, empty playthrough.
+- Host loads a save: that save's playthrough. A save never used for co-op starts a new playthrough with its
+  own progress.
+- A player starts a new game while connected: the new save joins the playthrough.
+- A player loads a save of this playthrough: it catches up with everything that happened in the meantime.
+- A player loads a save that was never used for co-op: the menu asks first, since adding it shares its
+  progress with everyone.
+- A player loads a save of a different playthrough: progression is not shared for that save. Playing together
+  still works.
+- Until the host has loaded a save, nothing is shared.
+
+Every member's save carries the playthrough, so anyone of the group can host it later.
 
 Settings like key bindings live in `BepInEx/config/io.github.siroxcw.multiplehornetsmod.cfg`.
 

@@ -392,7 +392,8 @@ internal sealed class SceneDomain : IWorldDomain
     }
 
     /// <summary>Memory sequences replay the past and have their own scripted state.</summary>
-    private static bool IsSyncedScene(string scene) => !string.IsNullOrEmpty(scene) && !scene.StartsWith("Memory");
+    private static bool IsSyncedScene(string scene) =>
+        !string.IsNullOrEmpty(scene) && !scene.StartsWith("Memory") && scene != PlaythroughId.SceneName;
 
     private string BoolKey(string scene, string id) => CachedKey(WorldKeys.SceneBool, scene, id);
 
