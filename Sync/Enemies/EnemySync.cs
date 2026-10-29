@@ -241,6 +241,17 @@ internal static class EnemySync
         body.Put((byte)attackType);
     }
 
+    /// <summary>
+    /// Somebody still interacts with an enemy that is dead here, so their copy missed the death. Tell everyone
+    /// again; dead puppets ignore it.
+    /// </summary>
+    private static void ResendDeath(Entity entity)
+    {
+        var body = BeginEvent(EventDeath, entity);
+        body.Put(float.NaN);
+        body.Put((byte)AttackTypes.Generic);
+    }
+
     /// <summary>Switches a puppet FSM to the owner's state, bypassing the transition block.</summary>
     public static void ForceSwitchState(Fsm fsm, FsmState state)
     {
@@ -656,7 +667,12 @@ internal static class EnemySync
             return;
         }
 
-        if (entity.IsPuppet || entity.Health.isDead) return;
+        if (entity.IsPuppet) return;
+        if (entity.Health.isDead)
+        {
+            ResendDeath(entity);
+            return;
+        }
 
         // We keep enemies we are fighting. Otherwise the closer player gets it, which also stops two idle players
         // standing near the same enemy from passing it back and forth.
@@ -693,7 +709,12 @@ internal static class EnemySync
         var element = (NailElements)reader.GetByte();
         var attackerPosition = reader.GetVector2();
 
-        if (!Entities.TryGetValue(id, out var entity) || !entity.IsValid || entity.IsPuppet || entity.Health.isDead) return;
+        if (!Entities.TryGetValue(id, out var entity) || !entity.IsValid || entity.IsPuppet) return;
+        if (entity.Health.isDead)
+        {
+            ResendDeath(entity);
+            return;
+        }
 
         RemoteHit.Apply(entity, damage, attackType, direction, magnitude, stun, flags, element, attackerPosition);
         entity.ForceHpSend = true;
