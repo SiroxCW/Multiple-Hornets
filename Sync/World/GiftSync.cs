@@ -120,7 +120,7 @@ internal static class GiftSync
             if (entry.Key.StartsWith(WorldKeys.GiftUnique) && !item.CanGetMore()) return null;
             if (_catchUp && AlreadyCollectedInOwnSave(entry.Key)) return null;
 
-            item.Collect(entry.Value, showPopup: true);
+            item.Collect(entry.Value, showPopup: !WorldSync.IsCatchingUp);
             return $"found {item.GetPopupName()}";
         }
 

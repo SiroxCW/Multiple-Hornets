@@ -163,8 +163,16 @@ internal static class EnemySync
     public static void OnPuppetTransitionBlocked(Fsm fsm, FsmTransition transition)
     {
         var fsmEvent = transition?.FsmEvent;
-        if (fsmEvent == null || fsmEvent == FsmEvent.Finished || Fsm.EventData.SentByFsm == fsm) return;
+        if (fsmEvent == null || fsmEvent == FsmEvent.Finished) return;
         if (!FsmBindings.TryGetValue(fsm, out var binding)) return;
+
+        // Messages between the FSMs of the same enemy are internal; they happen when owner states are replayed.
+        var sender = Fsm.EventData.SentByFsm;
+        if (sender == fsm || (sender != null && FsmBindings.TryGetValue(sender, out var senderBinding) &&
+                              senderBinding.Entity == binding.Entity))
+        {
+            return;
+        }
 
         var now = Time.realtimeSinceStartup;
         binding.BlockedEvent = fsmEvent;
@@ -300,7 +308,7 @@ internal static class EnemySync
         if (entity.IsValid) entity.SetPuppet(!IsLocalOwner(entity.Id));
     }
 
-    private static void OnSceneHost(NetPacketReader reader)
+    private static void OnSceneHost(NetDataReader reader)
     {
         var scene = reader.GetSafeString(128);
         var host = reader.GetUShort();
@@ -318,7 +326,7 @@ internal static class EnemySync
         Log.Debug($"Room {scene} host is {host}, {count} enemies handed over.");
     }
 
-    private static void OnEntityOwner(NetPacketReader reader)
+    private static void OnEntityOwner(NetDataReader reader)
     {
         var scene = reader.GetSafeString(128);
         var id = reader.GetUInt();
@@ -551,7 +559,7 @@ internal static class EnemySync
     private static void CheckHandoffs()
     {
         var hero = HeroController.SilentInstance;
-        if (!hero || Session.Players.Count == 0) return;
+        if (!hero || !_audience) return;
 
         var heroPosition = hero.transform.position;
         var now = Time.realtimeSinceStartup;
@@ -608,7 +616,7 @@ internal static class EnemySync
         Session.Client?.Send(writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
     }
 
-    private static void OnEntityClaim(NetPacketReader reader)
+    private static void OnEntityClaim(NetDataReader reader)
     {
         var requester = reader.GetUShort();
         var scene = reader.GetSafeString(128);
@@ -646,7 +654,7 @@ internal static class EnemySync
         SendTransfer(id, requester);
     }
 
-    private static void OnEntityHit(NetPacketReader reader)
+    private static void OnEntityHit(NetDataReader reader)
     {
         var attacker = reader.GetUShort();
         var id = reader.GetUInt();
@@ -701,7 +709,7 @@ internal static class EnemySync
         }
     }
 
-    private static void OnEntityEvents(NetPacketReader reader)
+    private static void OnEntityEvents(NetDataReader reader)
     {
         var sender = reader.GetUShort();
         var scene = reader.GetSafeString(128);
@@ -757,7 +765,7 @@ internal static class EnemySync
         }
     }
 
-    private static void OnEntityTransforms(NetPacketReader reader)
+    private static void OnEntityTransforms(NetDataReader reader)
     {
         var sender = reader.GetUShort();
         var scene = reader.GetSafeString(128);
@@ -779,7 +787,7 @@ internal static class EnemySync
         }
     }
 
-    private static void OnEntitySnapshot(NetPacketReader reader)
+    private static void OnEntitySnapshot(NetDataReader reader)
     {
         reader.GetUShort();
         var scene = reader.GetSafeString(128);

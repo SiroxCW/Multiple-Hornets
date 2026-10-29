@@ -26,6 +26,7 @@ internal sealed class Overlay : MonoBehaviour
     private bool _menuOpen;
     private bool _chatOpen;
     private bool _focusChat;
+    private bool _clearFocus;
     private float _chatOpenedAt;
     private string _chatText = "";
     private string _menuMessage = "";
@@ -62,6 +63,13 @@ internal sealed class Overlay : MonoBehaviour
     private void OnGUI()
     {
         _styles ??= new Styles();
+        if (_clearFocus)
+        {
+            // Focus can only be changed from inside OnGUI.
+            GUI.FocusControl(null);
+            _clearFocus = false;
+        }
+
         HandleHotkeys(Event.current);
 
         var scale = Screen.height / VirtualHeight;
@@ -87,7 +95,12 @@ internal sealed class Overlay : MonoBehaviour
         // Key repeat sends KeyDown continuously while held, only react to the first one.
         if (!_heldKeys.Add(e.keyCode)) return;
 
-        if (e.keyCode == KeyCode.Escape && _menuOpen)
+        if (e.keyCode == KeyCode.Escape && _chatOpen)
+        {
+            CloseChat();
+            e.Use();
+        }
+        else if (e.keyCode == KeyCode.Escape && _menuOpen)
         {
             _menuOpen = false;
             SaveFields();
@@ -221,7 +234,7 @@ internal sealed class Overlay : MonoBehaviour
     {
         _chatOpen = false;
         _chatText = "";
-        GUI.FocusControl(null);
+        _clearFocus = true;
     }
 
     private void DrawMenu(float width)

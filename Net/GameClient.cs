@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using MultipleHornetsMod.Core;
@@ -12,7 +13,13 @@ internal sealed class GameClient
 {
     private readonly EventBasedNetListener _listener = new();
     private readonly NetManager _net;
-    private readonly Action<NetPacketReader>?[] _handlers = new Action<NetPacketReader>?[256];
+    private readonly Action<NetDataReader>?[] _handlers = new Action<NetDataReader>?[256];
+
+    /// <summary>
+    /// Messages on other channels can overtake the welcome message, they are kept until it arrived.
+    /// </summary>
+    private readonly List<(byte Type, byte[] Payload)> _beforeWelcome = new();
+
     private NetPeer? _server;
     private bool _disconnectReported;
     private bool _stopRequested;
@@ -43,7 +50,7 @@ internal sealed class GameClient
     /// <summary>Raised once when the connection ends, with a human readable reason.</summary>
     public event Action<string>? Disconnected;
 
-    public void Register(Msg type, Action<NetPacketReader> handler) => _handlers[(byte)type] = handler;
+    public void Register(Msg type, Action<NetDataReader> handler) => _handlers[(byte)type] = handler;
 
     public bool Connect(string address, int port, string username, string password, out string error)
     {
@@ -128,8 +135,24 @@ internal sealed class GameClient
         if (reader.AvailableBytes == 0) return;
 
         var type = reader.GetByte();
-        if (!IsWelcomed && type != (byte)Msg.Welcome) return;
+        if (!IsWelcomed && type != (byte)Msg.Welcome)
+        {
+            if (_beforeWelcome.Count < 1000) _beforeWelcome.Add((type, reader.GetRemainingBytes()));
+            return;
+        }
 
+        Dispatch(type, reader);
+
+        if (type == (byte)Msg.Welcome && IsWelcomed && _beforeWelcome.Count > 0)
+        {
+            var buffered = _beforeWelcome.ToArray();
+            _beforeWelcome.Clear();
+            foreach (var (bufferedType, payload) in buffered) Dispatch(bufferedType, new NetDataReader(payload));
+        }
+    }
+
+    private void Dispatch(byte type, NetDataReader reader)
+    {
         var handler = _handlers[type];
         if (handler == null) return;
 

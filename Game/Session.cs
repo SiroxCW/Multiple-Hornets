@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using LiteNetLib;
+using LiteNetLib.Utils;
 using MultipleHornetsMod.Core;
 using MultipleHornetsMod.Net;
 using MultipleHornetsMod.UI;
@@ -28,7 +29,7 @@ internal sealed class PlayerInfo
 internal static class Session
 {
     private static readonly Dictionary<ushort, PlayerInfo> PlayerMap = new();
-    private static readonly Dictionary<Msg, Action<NetPacketReader>> ClientHandlers = new();
+    private static readonly Dictionary<Msg, Action<NetDataReader>> ClientHandlers = new();
     private static readonly List<Action<GameServer>> ServerInitializers = new();
 
     public static GameServer? Server { get; private set; }
@@ -75,7 +76,7 @@ internal static class Session
     }
 
     /// <summary>Registers a handler for a message type on every future client connection.</summary>
-    public static void RegisterHandler(Msg type, Action<NetPacketReader> handler) => ClientHandlers[type] = handler;
+    public static void RegisterHandler(Msg type, Action<NetDataReader> handler) => ClientHandlers[type] = handler;
 
     /// <summary>Registers code that sets up server side handlers whenever this game starts hosting.</summary>
     public static void RegisterServerModule(Action<GameServer> initializer) => ServerInitializers.Add(initializer);
@@ -179,7 +180,7 @@ internal static class Session
         }
     }
 
-    private static void OnWelcome(NetPacketReader reader)
+    private static void OnWelcome(NetDataReader reader)
     {
         var localId = reader.GetUShort();
         LocalName = reader.GetSafeString();
@@ -200,14 +201,14 @@ internal static class Session
         foreach (var player in PlayerMap.Values) PlayerJoined?.Invoke(player);
     }
 
-    private static void OnPlayerJoined(NetPacketReader reader)
+    private static void OnPlayerJoined(NetDataReader reader)
     {
         var player = new PlayerInfo(reader.GetUShort(), reader.GetSafeString());
         PlayerMap[player.Id] = player;
         PlayerJoined?.Invoke(player);
     }
 
-    private static void OnPlayerLeft(NetPacketReader reader)
+    private static void OnPlayerLeft(NetDataReader reader)
     {
         var id = reader.GetUShort();
         if (!PlayerMap.TryGetValue(id, out var player)) return;
@@ -216,7 +217,7 @@ internal static class Session
         PlayerLeft?.Invoke(player);
     }
 
-    private static void OnPlayerScene(NetPacketReader reader)
+    private static void OnPlayerScene(NetDataReader reader)
     {
         var id = reader.GetUShort();
         var scene = reader.GetSafeString(128);
@@ -227,7 +228,7 @@ internal static class Session
         PlayerSceneChanged?.Invoke(player, oldScene);
     }
 
-    private static void OnChat(NetPacketReader reader)
+    private static void OnChat(NetDataReader reader)
     {
         var id = reader.GetUShort();
         var text = reader.GetSafeString();

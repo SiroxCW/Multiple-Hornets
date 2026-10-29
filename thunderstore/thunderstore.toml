@@ -5,7 +5,7 @@ schemaVersion = "0.0.1"
 # The name of the team you are publishing as
 namespace = "SiroxCW"
 # max 250 characters
-description = "Example mod description"
+description = "All-in-one co-op multiplayer: see each other, fight the same enemies and bosses, and share all progression."
 
 # Replace this with a correct repo URL if the default is not accurate
 websiteUrl = "https://github.com/SiroxCW/MultipleHornetsMod"

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using LiteNetLib;
+using LiteNetLib.Utils;
 using MultipleHornetsMod.Core;
 using MultipleHornetsMod.Game;
 using MultipleHornetsMod.Net;
@@ -109,6 +110,9 @@ internal static class WorldSync
     /// <summary>True while remote entries are being applied, hooks must not report these changes.</summary>
     public static bool IsApplying { get; private set; }
 
+    /// <summary>True while the whole world is applied to a freshly loaded save. No popups then.</summary>
+    public static bool IsCatchingUp { get; private set; }
+
     /// <summary>True while a save is loaded and progression is being synced.</summary>
     public static bool IsActive => _active;
 
@@ -206,17 +210,22 @@ internal static class WorldSync
         foreach (var entry in Mirror.Values) world.Add((0, entry));
 
         IsApplying = true;
+        IsCatchingUp = true;
+        var applied = 0;
         try
         {
             // Catch-up gifts must be checked against our own save before anything else changes it.
             GiftSync.BeginCatchUp();
-            ApplyEntries(world, notify: false);
+            applied = ApplyEntries(world, notify: false);
         }
         finally
         {
             GiftSync.EndCatchUp();
+            IsCatchingUp = false;
             IsApplying = false;
         }
+
+        if (applied > 0) ChatLog.AddProgress($"Caught up with the shared world ({applied} changes applied).");
 
         foreach (var domain in Domains) Run(domain, d => d.CaptureAll(Reporter), "CaptureAll");
         _active = true;
@@ -227,7 +236,7 @@ internal static class WorldSync
         Log.Info($"Progression sync started, shared {sent} local entries.");
     }
 
-    private static void OnWorldChanges(NetPacketReader reader)
+    private static void OnWorldChanges(NetDataReader reader)
     {
         var source = reader.GetUShort();
         var count = reader.GetUShort();
@@ -272,9 +281,11 @@ internal static class WorldSync
         }
     }
 
-    private static void ApplyEntries(IReadOnlyList<(ushort Source, WorldEntry Entry)> entries, bool notify)
+    /// <summary>Applies entries and returns how many of them changed something.</summary>
+    private static int ApplyEntries(IReadOnlyList<(ushort Source, WorldEntry Entry)> entries, bool notify)
     {
         var notifications = new List<(ushort Source, string Text)>();
+        var changed = 0;
 
         // Gifts first, so their duplicate checks see our own save untouched.
         for (var pass = 0; pass < 2; pass++)
@@ -286,16 +297,19 @@ internal static class WorldSync
                 if (!WorldKeys.IsAllowed(Session.Settings, entry.Category)) continue;
 
                 var text = ApplyEntry(entry);
-                if (text != null && notify && source != 0) notifications.Add((source, text));
+                if (text == null) continue;
+
+                changed++;
+                if (notify && source != 0) notifications.Add((source, text));
             }
         }
 
-        if (notifications.Count == 0) return;
+        if (notifications.Count == 0) return changed;
 
         if (notifications.Count > MaxNotificationsPerBatch)
         {
             ChatLog.AddProgress($"Received {notifications.Count} progress updates from other players.");
-            return;
+            return changed;
         }
 
         foreach (var (source, text) in notifications)
@@ -303,6 +317,8 @@ internal static class WorldSync
             var name = Session.TryGetPlayer(source, out var player) ? player.Name : "Someone";
             ChatLog.AddProgress($"{name} {text}");
         }
+
+        return changed;
     }
 
     private static string? ApplyEntry(WorldEntry entry)

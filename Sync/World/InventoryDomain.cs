@@ -59,8 +59,8 @@ internal sealed class InventoryDomain : IWorldDomain
             var tool = ToolItemManager.GetToolByName(entry.Key.Substring(WorldKeys.Tool.Length));
             if (!tool || tool.IsUnlocked) return null;
 
-            // ItemGet only: the tutorial variant opens a prompt that waits for input.
-            tool.Unlock(null, ToolItem.PopupFlags.ItemGet);
+            // Never the tutorial variant, it opens a prompt that waits for input.
+            tool.Unlock(null, WorldSync.IsCatchingUp ? ToolItem.PopupFlags.None : ToolItem.PopupFlags.ItemGet);
             AutoEquipSilkSkill(tool);
             return $"found {tool.GetPopupName()}";
         }
@@ -74,7 +74,7 @@ internal sealed class InventoryDomain : IWorldDomain
             if (!crest || crest.IsUnlocked) return null;
 
             crest.Unlock();
-            ShowPopup(crest);
+            if (!WorldSync.IsCatchingUp) ShowPopup(crest);
             return $"obtained the {crest.GetPopupName()}";
         }
 
@@ -100,7 +100,7 @@ internal sealed class InventoryDomain : IWorldDomain
         var relic = CollectableRelicManager.GetRelic(entry.Key.Substring(WorldKeys.Relic.Length));
         if (!relic || relic.SavedData.IsCollected) return null;
 
-        relic.Get(showPopup: true);
+        relic.Get(showPopup: !WorldSync.IsCatchingUp);
         return $"found {relic.GetPopupName()}";
     }
 

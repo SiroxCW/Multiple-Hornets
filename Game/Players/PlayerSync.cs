@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using LiteNetLib;
+using LiteNetLib.Utils;
 using MultipleHornetsMod.Core;
 using MultipleHornetsMod.Net;
 using UnityEngine;
@@ -137,7 +138,7 @@ internal static class PlayerSync
         Session.Client?.Send(writer, Protocol.ChannelControl, DeliveryMethod.ReliableOrdered);
     }
 
-    private static void OnPlayerState(NetPacketReader reader)
+    private static void OnPlayerState(NetDataReader reader)
     {
         var id = reader.GetUShort();
         var senderTime = reader.GetFloat();
@@ -151,7 +152,7 @@ internal static class PlayerSync
         puppet.ApplyState(senderTime, position, scale, (flags & FlagVisible) != 0, Time.realtimeSinceStartupAsDouble);
     }
 
-    private static void OnPlayerAnim(NetPacketReader reader)
+    private static void OnPlayerAnim(NetDataReader reader)
     {
         var id = reader.GetUShort();
         var anim = new AnimData(reader.GetSafeString(128), reader.GetSafeString(128), reader.GetFloat(), reader.GetFloat());
