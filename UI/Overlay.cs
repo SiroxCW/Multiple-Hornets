@@ -40,6 +40,7 @@ internal sealed class Overlay : MonoBehaviour
     private string _address = "";
     private string _port = "";
     private string _password = "";
+    private string _hostAddress = "";
     private string _hostPort = "";
     private string _hostPassword = "";
 
@@ -50,6 +51,7 @@ internal sealed class Overlay : MonoBehaviour
         _username = ModConfig.Username;
         _address = ModConfig.JoinAddress;
         _port = ModConfig.JoinPort.ToString();
+        _hostAddress = ModConfig.HostAddress;
         _hostPort = ModConfig.HostPort.ToString();
     }
 
@@ -304,6 +306,8 @@ internal sealed class Overlay : MonoBehaviour
 
         GUILayout.Space(12f);
         GUILayout.Label("Host a game", styles.Header);
+        Field("Bind address", ref _hostAddress, 64, styles);
+        GUILayout.Label("0.0.0.0 accepts players on all network adapters. One of your PC's addresses (for example your Tailscale address) only accepts them through that one.", styles.Hint);
         Field("Port", ref _hostPort, 5, styles);
         Field("Password", ref _hostPassword, 32, styles);
         GUILayout.Label("The save you load decides the shared playthrough: a new game starts a new one, an existing save continues its own.", styles.Hint);
@@ -315,7 +319,7 @@ internal sealed class Overlay : MonoBehaviour
             {
                 _menuMessage = "Invalid port.";
             }
-            else if (!Session.Host(port, _hostPassword, out var error))
+            else if (!Session.Host(_hostAddress, port, _hostPassword, out var error))
             {
                 _menuMessage = error;
             }
@@ -413,7 +417,7 @@ internal sealed class Overlay : MonoBehaviour
     private static void Field(string label, ref string value, int maxLength, Styles styles)
     {
         GUILayout.BeginHorizontal();
-        GUILayout.Label(label, styles.Label, GUILayout.Width(110f));
+        GUILayout.Label(label, styles.Label, GUILayout.Width(130f));
         value = GUILayout.TextField(value, maxLength, styles.TextField);
         GUILayout.EndHorizontal();
     }
@@ -425,6 +429,8 @@ internal sealed class Overlay : MonoBehaviour
         ModConfig.JoinAddress = _address.Trim();
         if (int.TryParse(_port, out var port)) ModConfig.JoinPort = port;
         if (int.TryParse(_hostPort, out var hostPort)) ModConfig.HostPort = hostPort;
+        var hostAddress = _hostAddress.Trim();
+        ModConfig.HostAddress = hostAddress.Length > 0 ? hostAddress : "0.0.0.0";
     }
 
     private static string StatusText()
@@ -432,7 +438,7 @@ internal sealed class Overlay : MonoBehaviour
         if (Session.IsConnected)
         {
             return Session.IsHost
-                ? $"Hosting on UDP port {Session.Server?.Port}."
+                ? $"Hosting on {Session.Server?.ListenDescription}."
                 : $"Connected, ping {Session.Client?.RoundTripTime ?? 0} ms.";
         }
 

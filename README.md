@@ -41,8 +41,9 @@ Do **not** use it together with SSMP, BasicItemSync or BasicEnemySync. Multiple 
 
 1. Press `F5` (in the main menu or in game) to open the Multiple Hornets menu.
 2. Enter your name.
-3. **Host**: choose a port (default `26950`) and press *Host*. Other players need your IP address and the UDP port
-   forwarded on your router, or a VPN such as Tailscale, ZeroTier or Radmin VPN.
+3. **Host**: choose a port (default `26960`) and press *Host*. Other players need your IP address and the UDP port
+   forwarded on your router, or a VPN such as Tailscale, ZeroTier or Radmin VPN. The bind address `0.0.0.0`
+   accepts players on all network adapters; enter one of your PC's addresses to only accept them through that one.
 4. **Join**: enter the host's address and port and press *Join*.
 5. Load a save file. Everyone plays on their own save, the mod keeps them in sync.
 

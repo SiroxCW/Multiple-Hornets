@@ -11,7 +11,7 @@ internal static class Protocol
     public const int Version = 2;
 
     public const string AppKey = "MultipleHornets";
-    public const int DefaultPort = 26950;
+    public const int DefaultPort = 26960;
 
     /// <summary>Handshake, player list, player movement and chat.</summary>
     public const byte ChannelControl = 0;

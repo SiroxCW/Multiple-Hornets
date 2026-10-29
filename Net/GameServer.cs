@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -47,6 +49,7 @@ internal sealed class GameServer
     private string _password = "";
     private int _maxPlayers = 8;
     private ushort _nextId = 1;
+    private IPAddress _bindAddress = IPAddress.Any;
 
     public GameServer()
     {
@@ -75,6 +78,17 @@ internal sealed class GameServer
     public int Port => _net.LocalPort;
     public bool IsRunning => _net.IsRunning;
 
+    /// <summary>Address the game of the host connects to, it has to reach the server like everybody else.</summary>
+    public string LocalAddress => ListensOnAll || _bindAddress.AddressFamily == AddressFamily.InterNetworkV6
+        ? "127.0.0.1"
+        : _bindAddress.ToString();
+
+    public string ListenDescription => ListensOnAll
+        ? $"UDP port {Port} on all network adapters"
+        : $"{_bindAddress}, UDP port {Port}";
+
+    private bool ListensOnAll => _bindAddress.Equals(IPAddress.Any) || _bindAddress.Equals(IPAddress.IPv6Any);
+
     /// <summary>Raised after the welcome message was sent to a new player.</summary>
     public event Action<ServerPlayer>? PlayerJoined;
 
@@ -84,20 +98,48 @@ internal sealed class GameServer
     /// <summary>Raised when a player changed rooms. The second argument is the previous room.</summary>
     public event Action<ServerPlayer, string>? PlayerSceneChanged;
 
-    public bool Start(int port, string password, int maxPlayers, out string error)
+    /// <summary>Accepts IPv4 and IPv6 addresses. Empty means all network adapters.</summary>
+    public static bool TryParseBindAddress(string text, out IPAddress address)
+    {
+        text = text.Trim();
+        if (text.Length == 0)
+        {
+            address = IPAddress.Any;
+            return true;
+        }
+
+        if (!IPAddress.TryParse(text, out address)) return false;
+
+        // IPAddress also accepts shortened forms like "192.168", which are almost certainly typos.
+        return address.AddressFamily == AddressFamily.InterNetworkV6 ||
+               address.AddressFamily == AddressFamily.InterNetwork && text.Split('.').Length == 4;
+    }
+
+    public bool Start(int port, string password, int maxPlayers, out string error) =>
+        Start(IPAddress.Any, port, password, maxPlayers, out error);
+
+    public bool Start(IPAddress bindAddress, int port, string password, int maxPlayers, out string error)
     {
         _password = password ?? "";
         _maxPlayers = maxPlayers;
+        _bindAddress = bindAddress;
+
+        // The IPv4 socket always exists. With a specific IPv6 address it only serves this PC, with a specific
+        // IPv4 address there is no IPv6 socket, which would listen everywhere.
+        var isIPv6 = bindAddress.AddressFamily == AddressFamily.InterNetworkV6;
+        var ipv4 = ListensOnAll ? IPAddress.Any : isIPv6 ? IPAddress.Loopback : bindAddress;
+        var ipv6 = isIPv6 && !ListensOnAll ? bindAddress : IPAddress.IPv6Any;
+        _net.IPv6Enabled = ListensOnAll || isIPv6;
 
         var started = false;
         try
         {
-            started = _net.Start(port);
-            if (!started)
+            started = _net.Start(ipv4, ipv6, port);
+            if (!started && ListensOnAll)
             {
                 // Some setups (e.g. Wine without IPv6) cannot open a dual stack socket.
                 _net.IPv6Enabled = false;
-                started = _net.Start(port);
+                started = _net.Start(ipv4, ipv6, port);
             }
         }
         catch (Exception e)
@@ -105,8 +147,10 @@ internal sealed class GameServer
             Log.Error($"Could not start server: {e}");
         }
 
-        error = started ? "" : $"Could not open UDP port {port}. Is another program using it?";
-        if (started) Log.Info($"Server started on port {_net.LocalPort}.");
+        error = started ? "" :
+            ListensOnAll ? $"Could not open UDP port {port}. Is another program using it?" :
+            $"Could not listen on {bindAddress}, UDP port {port}. Is it an address of this PC, and is the port free?";
+        if (started) Log.Info($"Server listening on {ListenDescription}.");
         return started;
     }
 

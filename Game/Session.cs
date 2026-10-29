@@ -83,8 +83,14 @@ internal static class Session
 
     public static bool TryGetPlayer(ushort id, out PlayerInfo player) => PlayerMap.TryGetValue(id, out player);
 
-    public static bool Host(int port, string password, out string error)
+    public static bool Host(string bindAddress, int port, string password, out string error)
     {
+        if (!GameServer.TryParseBindAddress(bindAddress, out var bind))
+        {
+            error = "Invalid bind address. Use 0.0.0.0 for all network adapters, or one of this PC's IP addresses.";
+            return false;
+        }
+
         Leave();
 
         var server = new GameServer();
@@ -101,10 +107,14 @@ internal static class Session
             }
         }
 
-        if (!server.Start(port, password, ModConfig.MaxPlayers, out error)) return false;
+        if (!server.Start(bind, port, password, ModConfig.MaxPlayers, out error)) return false;
 
         Server = server;
-        if (StartClient("127.0.0.1", server.Port, password, out error)) return true;
+        if (StartClient(server.LocalAddress, server.Port, password, out error))
+        {
+            ChatLog.AddSystem($"Hosting on {server.ListenDescription}.");
+            return true;
+        }
 
         server.Stop();
         Server = null;
@@ -114,7 +124,10 @@ internal static class Session
     public static bool Join(string address, int port, string password, out string error)
     {
         Leave();
-        return StartClient(address, port, password, out error);
+        if (!StartClient(address, port, password, out error)) return false;
+
+        ChatLog.AddSystem($"Connecting to {address}:{port}...");
+        return true;
     }
 
     public static void Leave()
@@ -151,7 +164,6 @@ internal static class Session
         if (!client.Connect(address, port, ModConfig.Username, password, out error)) return false;
 
         Client = client;
-        ChatLog.AddSystem($"Connecting to {address}:{port}...");
         return true;
     }
 

@@ -12,6 +12,7 @@ internal static class ModConfig
     private static ConfigEntry<string> _username = null!;
     private static ConfigEntry<string> _joinAddress = null!;
     private static ConfigEntry<int> _joinPort = null!;
+    private static ConfigEntry<string> _hostAddress = null!;
     private static ConfigEntry<int> _hostPort = null!;
     private static ConfigEntry<int> _maxPlayers = null!;
     private static ConfigEntry<KeyCode> _menuKey = null!;
@@ -28,6 +29,9 @@ internal static class ModConfig
 
         _joinAddress = config.Bind("Connection", "LastAddress", "127.0.0.1", "Last address used to join a game.");
         _joinPort = config.Bind("Connection", "LastPort", Protocol.DefaultPort, "Last port used to join a game.");
+        _hostAddress = config.Bind("Hosting", "BindAddress", "0.0.0.0",
+            "Address the server listens on. 0.0.0.0 listens on all network adapters. One of this PC's IP addresses " +
+            "(for example a Tailscale address) only accepts players through that adapter.");
         _hostPort = config.Bind("Hosting", "Port", Protocol.DefaultPort, "UDP port used when hosting.");
         _maxPlayers = config.Bind("Hosting", "MaxPlayers", 8, "Maximum number of players when hosting.");
 
@@ -50,6 +54,12 @@ internal static class ModConfig
     {
         get => _joinPort.Value;
         set => _joinPort.Value = value;
+    }
+
+    public static string HostAddress
+    {
+        get => _hostAddress.Value;
+        set => _hostAddress.Value = value;
     }
 
     public static int HostPort
