@@ -18,7 +18,7 @@ internal sealed class FsmBinding
         Component = component;
         Fsm = component.Fsm;
 
-        var states = Fsm.States;
+        var states = Fsm.States ?? System.Array.Empty<FsmState>();
         for (var i = 0; i < states.Length; i++) _stateIndices[states[i]] = i;
     }
 
@@ -212,7 +212,7 @@ internal sealed class Entity
 
         var binding = Fsms[fsmIndex];
         var states = binding.Fsm.States;
-        if (stateIndex < 0 || stateIndex >= states.Length) return;
+        if (states == null || stateIndex < 0 || stateIndex >= states.Length) return;
 
         if (!binding.IsRunning)
         {

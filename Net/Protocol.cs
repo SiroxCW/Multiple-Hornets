@@ -61,6 +61,7 @@ internal enum Msg : byte
     EntityTransfer = 45,
     EntityClaim = 46,
     EntitySnapshot = 47,
+    EntitySnapshotRequest = 48,
 }
 
 internal static class NetExtensions

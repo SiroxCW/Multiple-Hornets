@@ -26,6 +26,7 @@ internal sealed class EntityServer
         server.Register(Msg.EntityTransfer, OnTransfer);
         server.Register(Msg.EntityClaim, OnClaim);
         server.Register(Msg.EntitySnapshot, OnSnapshot);
+        server.Register(Msg.EntitySnapshotRequest, OnSnapshotRequest);
 
         server.PlayerSceneChanged += OnPlayerSceneChanged;
         server.PlayerLeft += player => Leave(player, player.Scene);
@@ -145,6 +146,22 @@ internal sealed class EntityServer
         if (owner == player.Id || !_server.TryGetPlayer(owner, out var target)) return;
 
         var writer = GameServer.Begin(Msg.EntityClaim);
+        writer.Put(player.Id);
+        writer.Put(scene);
+        writer.Put(id);
+        _server.Send(target, writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
+    }
+
+    private void OnSnapshotRequest(ServerPlayer player, NetPacketReader reader)
+    {
+        var scene = reader.GetSafeString(128);
+        var id = reader.GetUInt();
+        if (scene != player.Scene || !_scenes.TryGetValue(scene, out var state)) return;
+
+        var owner = state.OwnerOf(id);
+        if (owner == player.Id || !_server.TryGetPlayer(owner, out var target)) return;
+
+        var writer = GameServer.Begin(Msg.EntitySnapshotRequest);
         writer.Put(player.Id);
         writer.Put(scene);
         writer.Put(id);

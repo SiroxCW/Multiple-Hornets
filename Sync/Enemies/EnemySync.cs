@@ -64,6 +64,7 @@ internal static class EnemySync
     private static float _transformTimer;
     private static float _handoffTimer;
     private static float _claimTimer;
+    private static float _sceneEnteredAt;
 
     /// <summary>Set while a death reported by the owner is performed on a puppet.</summary>
     public static bool AuthorizedDeath { get; set; }
@@ -80,6 +81,7 @@ internal static class EnemySync
         Session.RegisterHandler(Msg.EntityHit, OnEntityHit);
         Session.RegisterHandler(Msg.EntityClaim, OnEntityClaim);
         Session.RegisterHandler(Msg.EntitySnapshot, OnEntitySnapshot);
+        Session.RegisterHandler(Msg.EntitySnapshotRequest, OnEntitySnapshotRequest);
 
         Session.Disconnected += () => SwitchScene("");
         Session.PlayerSceneChanged += OnPlayerSceneChanged;
@@ -279,6 +281,7 @@ internal static class EnemySync
         var othersHere = Session.Players.Values.Any(p => p.Scene == scene);
         _host = othersHere ? ushort.MaxValue : Session.LocalId;
         _scanTimer = 0f;
+        _sceneEnteredAt = Time.realtimeSinceStartup;
     }
 
     /// <summary>Turns all puppets back into normal enemies and forgets the room.</summary>
@@ -344,11 +347,25 @@ internal static class EnemySync
         if (_scene.Length == 0 || player.Scene != _scene) return;
 
         // Somebody entered our room: tell them how the enemies we own are doing.
+        SendSnapshot(player.Id, Entities.Values.Where(e => e.IsValid && !e.IsPuppet));
+    }
+
+    private static void OnEntitySnapshotRequest(NetDataReader reader)
+    {
+        var requester = reader.GetUShort();
+        var scene = reader.GetSafeString(128);
+        var id = reader.GetUInt();
+        if (scene != _scene || !Entities.TryGetValue(id, out var entity) || !entity.IsValid || entity.IsPuppet) return;
+
+        SendSnapshot(requester, new[] { entity });
+    }
+
+    private static void SendSnapshot(ushort target, IEnumerable<Entity> entities)
+    {
         var body = new NetDataWriter();
         var count = 0;
-        foreach (var entity in Entities.Values)
+        foreach (var entity in entities)
         {
-            if (!entity.IsValid || entity.IsPuppet) continue;
             entity.WriteSnapshot(body);
             count++;
         }
@@ -356,7 +373,7 @@ internal static class EnemySync
         if (count == 0) return;
 
         var writer = GameClient.Begin(Msg.EntitySnapshot);
-        writer.Put(player.Id);
+        writer.Put(target);
         writer.Put(_scene);
         writer.Put((ushort)count);
         writer.Put(body.Data, 0, body.Length);
@@ -413,6 +430,15 @@ internal static class EnemySync
         {
             PendingSnapshots.Remove(id);
             if (entity.IsPuppet) entity.ApplySnapshot(snapshot);
+        }
+        else if (entity.IsPuppet && Time.realtimeSinceStartup - _sceneEnteredAt > 1.5f)
+        {
+            // It became active here later than at the owner (the room snapshot came before it existed), so
+            // the owner may be past the states this puppet would start in.
+            var writer = GameClient.Begin(Msg.EntitySnapshotRequest);
+            writer.Put(_scene);
+            writer.Put(id);
+            Session.Client?.Send(writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
         }
 
         Log.Debug($"Registered enemy {path} as {id:X8} ({(entity.IsPuppet ? "puppet" : "owned")}, {entity.Fsms.Count} FSMs)");
