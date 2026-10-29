@@ -16,7 +16,7 @@ internal sealed class EntityServer
     private readonly GameServer _server;
     private readonly Dictionary<string, SceneState> _scenes = new();
 
-    private EntityServer(GameServer server)
+    internal EntityServer(GameServer server)
     {
         _server = server;
 

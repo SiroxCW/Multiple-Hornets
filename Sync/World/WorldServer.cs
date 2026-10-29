@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -17,18 +18,20 @@ namespace MultipleHornetsMod.Sync.World;
 internal sealed class WorldServer
 {
     private const int BatchSize = 150;
-    private const float SaveDelay = 3f;
+    private const long SaveDelayMs = 3000;
+
+    private static readonly Stopwatch Clock = Stopwatch.StartNew();
 
     private readonly GameServer _server;
     private readonly Dictionary<string, WorldEntry> _state = new();
     private readonly string _filePath;
     private bool _dirty;
-    private float _dirtySince;
+    private long _dirtySince;
 
-    private WorldServer(GameServer server, string worldName)
+    internal WorldServer(GameServer server, string worldName, string? directory = null)
     {
         _server = server;
-        _filePath = Path.Combine(DataPaths.Root, "worlds", SafeFileName(worldName) + ".txt");
+        _filePath = Path.Combine(directory ?? Path.Combine(DataPaths.Root, "worlds"), SafeFileName(worldName) + ".txt");
         Load();
 
         server.Register(Msg.WorldChanges, OnWorldChanges);
@@ -36,6 +39,8 @@ internal sealed class WorldServer
     }
 
     public static WorldServer? Current { get; private set; }
+
+    public bool TryGet(string key, out WorldEntry entry) => _state.TryGetValue(key, out entry);
 
     public int EntryCount => _state.Count;
 
@@ -51,7 +56,7 @@ internal sealed class WorldServer
 
     public void Update()
     {
-        if (_dirty && UnityEngine.Time.realtimeSinceStartup - _dirtySince > SaveDelay) SaveNow();
+        if (_dirty && Clock.ElapsedMilliseconds - _dirtySince > SaveDelayMs) SaveNow();
     }
 
     public void SaveNow()
@@ -170,7 +175,7 @@ internal sealed class WorldServer
         }
 
         _state[entry.Key] = entry;
-        if (!_dirty) _dirtySince = UnityEngine.Time.realtimeSinceStartup;
+        if (!_dirty) _dirtySince = Clock.ElapsedMilliseconds;
         _dirty = true;
         return true;
     }

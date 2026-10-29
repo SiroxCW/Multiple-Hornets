@@ -357,9 +357,12 @@ internal sealed class GameServer
 
     private void OnPlayerAnim(ServerPlayer player, NetPacketReader reader)
     {
-        player.LastAnim = reader.GetRemainingBytesSegment().ToArray();
+        // Reading the remaining bytes consumes them, so read once and use the copy for both purposes.
+        player.LastAnim = reader.GetRemainingBytes();
 
-        var writer = BeginRelay(Msg.PlayerAnim, player, reader);
+        var writer = Begin(Msg.PlayerAnim);
+        writer.Put(player.Id);
+        writer.Put(player.LastAnim);
         BroadcastToScene(player.Scene, writer, Protocol.ChannelControl, DeliveryMethod.ReliableOrdered, player);
     }
 
