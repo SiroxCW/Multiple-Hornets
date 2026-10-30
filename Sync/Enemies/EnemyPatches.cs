@@ -18,6 +18,7 @@ internal static class FsmEnterStatePatch
             if (Game.Session.IsConnected) Watchdog.MarkFsm(__instance, state);
             EnemySync.OnFsmEnterState(__instance, state);
             World.BerrySync.OnFsmEnterState(__instance, state);
+            World.TriggerSync.OnFsmEnterState(__instance, state);
 
             // Corpses are not synced, each player's copy has to run this on its own.
             if (__instance.Name == "Death" && Game.Session.IsConnected) Log.Debug($"Corpse {__instance.OwnerName} -> {state.Name}");

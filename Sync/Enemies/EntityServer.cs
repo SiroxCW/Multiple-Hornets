@@ -23,6 +23,7 @@ internal sealed class EntityServer
         server.Register(Msg.EntityEvents, (player, reader) => RelayToScene(Msg.EntityEvents, player, reader, DeliveryMethod.ReliableOrdered));
         server.Register(Msg.EntityTransforms, (player, reader) => RelayToScene(Msg.EntityTransforms, player, reader, DeliveryMethod.Sequenced));
         server.Register(Msg.WorldHit, (player, reader) => RelayToScene(Msg.WorldHit, player, reader, DeliveryMethod.ReliableOrdered));
+        server.Register(Msg.WorldTrigger, (player, reader) => RelayToScene(Msg.WorldTrigger, player, reader, DeliveryMethod.ReliableOrdered));
         server.Register(Msg.EntityHit, OnHit);
         server.Register(Msg.EntityTransfer, OnTransfer);
         server.Register(Msg.EntityClaim, OnClaim);

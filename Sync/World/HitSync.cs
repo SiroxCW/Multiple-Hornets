@@ -81,6 +81,47 @@ internal static class HitSync
     }
 }
 
+/// <summary>
+/// A lever asks whether the hero stands close enough, and pushes the hero back. A teammate's hit has to work from
+/// wherever our hero is and must not move it, otherwise the lever only changes later when its saved state arrives,
+/// which skips the moving part.
+/// </summary>
+[HarmonyPatch(typeof(Lever), nameof(Lever.Hit))]
+internal static class LeverReplayPatch
+{
+    private static void Prefix(Lever __instance, out (TrackTriggerObjects? Range, bool Recoil, bool Replaced) __state)
+    {
+        __state = (__instance.canHitTrigger, __instance.recoilHero, RemoteHit.Active);
+        if (!RemoteHit.Active) return;
+
+        __instance.canHitTrigger = null;
+        __instance.recoilHero = false;
+    }
+
+    private static void Postfix(Lever __instance, (TrackTriggerObjects? Range, bool Recoil, bool Replaced) __state)
+    {
+        if (!__state.Replaced) return;
+
+        __instance.canHitTrigger = __state.Range;
+        __instance.recoilHero = __state.Recoil;
+    }
+}
+
+[HarmonyPatch(typeof(Lever_tk2d), nameof(Lever_tk2d.Hit))]
+internal static class LeverTk2dReplayPatch
+{
+    private static void Prefix(Lever_tk2d __instance, out (TrackTriggerObjects? Range, bool Replaced) __state)
+    {
+        __state = (__instance.canHitTrigger, RemoteHit.Active);
+        if (RemoteHit.Active) __instance.canHitTrigger = null;
+    }
+
+    private static void Postfix(Lever_tk2d __instance, (TrackTriggerObjects? Range, bool Replaced) __state)
+    {
+        if (__state.Replaced) __instance.canHitTrigger = __state.Range;
+    }
+}
+
 [HarmonyPatch(typeof(DamageEnemies), nameof(DamageEnemies.DoDamage), typeof(GameObject), typeof(bool))]
 internal static class DamageEnemiesDoDamagePatch
 {

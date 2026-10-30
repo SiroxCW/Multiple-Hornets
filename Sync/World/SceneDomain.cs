@@ -29,6 +29,16 @@ internal sealed class SceneDomain : IWorldDomain
     private const string ActivatedState = "Activated";
     private const string WaitingState = "Idle";
 
+    /// <summary>A falling platform ends here, for other objects with this state it means something else.</summary>
+    private const string ChainDropName = "Chain Drop";
+    private const string ChainDropActivatedState = "Activate";
+
+    /// <summary>
+    /// A teammate in the room also sends how the object got there, which looks better than jumping to the end, and
+    /// it can arrive after the saved state. The object only jumps if that has not started it in time.
+    /// </summary>
+    private const float RefreshDelay = 0.4f;
+
     /// <summary>Persistent ints are mostly internal counters, only these are known to be progression.</summary>
     private static readonly (string Prefix, WorldCategory Category)[] SyncedInts =
     {
@@ -47,6 +57,7 @@ internal sealed class SceneDomain : IWorldDomain
     private readonly List<PersistentIntItem> _roomInts = new();
     private readonly Dictionary<string, string> _keyCache = new();
     private readonly List<(string Key, int Value, WorldCategory Category)> _hookReports = new();
+    private readonly List<(PersistentBoolItem Item, float Time)> _delayedRefreshes = new();
     private string _scannedScene = "";
     private float _rescanTimer;
 
@@ -59,6 +70,7 @@ internal sealed class SceneDomain : IWorldDomain
         _roomBools.Clear();
         _roomInts.Clear();
         _hookReports.Clear();
+        _delayedRefreshes.Clear();
         _scannedScene = "";
     }
 
@@ -102,6 +114,8 @@ internal sealed class SceneDomain : IWorldDomain
 
         _rescanTimer -= Time.unscaledDeltaTime;
         if (_scannedScene != GameState.CurrentScene || _rescanTimer <= 0f) Rescan();
+
+        RunDelayedRefreshes();
 
         foreach (var item in _roomBools)
         {
@@ -184,7 +198,9 @@ internal sealed class SceneDomain : IWorldDomain
             var data = live!.ItemData;
             data.Value = true;
             sceneData.SetValue(data);
-            RefreshLive(live);
+
+            if (IsTeammateHere(scene)) _delayedRefreshes.Add((live, Time.unscaledTime + RefreshDelay));
+            else RefreshLive(live);
             return;
         }
 
@@ -236,6 +252,28 @@ internal sealed class SceneDomain : IWorldDomain
         });
     }
 
+    private static bool IsTeammateHere(string scene)
+    {
+        foreach (var player in Session.Players.Values)
+        {
+            if (player.Scene == scene) return true;
+        }
+
+        return false;
+    }
+
+    private void RunDelayedRefreshes()
+    {
+        for (var i = _delayedRefreshes.Count - 1; i >= 0; i--)
+        {
+            var (item, time) = _delayedRefreshes[i];
+            if (Time.unscaledTime < time) continue;
+
+            _delayedRefreshes.RemoveAt(i);
+            if (item && !(TryReadCurrent(item, out var current) && current)) RefreshLive(item);
+        }
+    }
+
     /// <summary>
     /// Re-runs the object's own load logic, exactly what happens when a room is entered with this state saved,
     /// then nudges FSM driven objects into their activated state.
@@ -266,10 +304,11 @@ internal sealed class SceneDomain : IWorldDomain
 
         // Some objects only listen for these while loading (a berry waiting to be hit does not), so they would stay
         // in the room and could be used a second time. The state they load into is where they have to end up.
-        if (fsm.ActiveStateName != state || state == ActivatedState) return;
+        var activatedState = item.name.Contains(ChainDropName) ? ChainDropActivatedState : ActivatedState;
+        if (fsm.ActiveStateName != state || state == activatedState) return;
         foreach (var candidate in fsm.FsmStates)
         {
-            if (candidate.Name != ActivatedState) continue;
+            if (candidate.Name != activatedState) continue;
 
             // Only an object still waiting can skip ahead. A running one may hold the hero, as the weakness cutscene
             // does, and leaving its state early would never give the controls back. It finishes by itself.
@@ -280,7 +319,7 @@ internal sealed class SceneDomain : IWorldDomain
             }
 
             Log.Debug($"Object {item.name} moved to its activated state");
-            fsm.SetState(ActivatedState);
+            fsm.SetState(activatedState);
             return;
         }
     }
