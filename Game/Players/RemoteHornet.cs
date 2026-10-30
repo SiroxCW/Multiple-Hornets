@@ -27,6 +27,9 @@ internal sealed class RemoteHornet : MonoBehaviour
     public ushort PlayerId { get; private set; }
     public string PlayerName { get; private set; } = "";
 
+    /// <summary>The silk of the bind this player is charging, gone by itself if the end of it never arrives.</summary>
+    public GameObject? BindSilk { get; set; }
+
     /// <summary>True when the player is drawn in the current room.</summary>
     public bool IsShown => gameObject.activeSelf && _renderer.enabled;
 

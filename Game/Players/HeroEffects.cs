@@ -62,8 +62,12 @@ internal static class HeroEffects
     {
         try
         {
+            if (!clip.Contains("Bind")) return;
+
+            Log.Debug($"Player {remote.PlayerId} plays {clip}");
             if (clip.Contains("BindCharge")) ShowBindStart(remote);
             else if (clip.Contains("BindBurst")) ShowBindEnd(remote);
+            else if (clip.Contains("BindCancel")) StopBindSilk(remote);
         }
         catch (Exception e)
         {
@@ -76,6 +80,9 @@ internal static class HeroEffects
         var hero = HeroController.SilentInstance;
         if (!hero) return;
 
+        // A bind can change between its charge animations, it still is the one bind.
+        if (remote.BindSilk) return;
+
         var bind = GetBindFsm(hero);
         if (bind != null)
         {
@@ -86,11 +93,19 @@ internal static class HeroEffects
             if (charge != null) PlaySound(hero, remote.transform, charge.audioClip.Value as AudioClip, charge.volume.Value);
         }
 
-        ShowEffect(hero, remote, "Bind Silk", "Bind Silk");
+        remote.BindSilk = ShowEffect(hero, remote, "Bind Silk", "Bind Silk", hideWhenDone: false);
+    }
+
+    private static void StopBindSilk(RemoteHornet remote)
+    {
+        if (remote.BindSilk) UnityEngine.Object.Destroy(remote.BindSilk);
+        remote.BindSilk = null;
     }
 
     private static void ShowBindEnd(RemoteHornet remote)
     {
+        StopBindSilk(remote);
+
         var hero = HeroController.SilentInstance;
         if (!hero) return;
 
@@ -98,17 +113,17 @@ internal static class HeroEffects
         var burst = bind != null ? FirstAction<AudioPlayerOneShotSingle>(bind, "Bind Burst") : null;
         if (burst != null) PlaySound(hero, remote.transform, burst.audioClip.Value as AudioClip, burst.volume.Value);
 
-        ShowEffect(hero, remote, "Heal Anim", null);
-        ShowEffect(hero, remote, "Pt Heal", null);
+        ShowEffect(hero, remote, "Heal Anim", null, hideWhenDone: true);
+        ShowEffect(hero, remote, "Pt Heal", null, hideWhenDone: true);
     }
 
-    private static void ShowEffect(HeroController hero, RemoteHornet remote, string name, string? clipName)
+    private static GameObject? ShowEffect(HeroController hero, RemoteHornet remote, string name, string? clipName, bool hideWhenDone)
     {
         var source = FindBelow(hero.transform, name);
         if (!source)
         {
             Log.Debug($"Hero effect {name} does not exist");
-            return;
+            return null;
         }
 
         var holder = AttackEffects.CopyVisual(source!, hero.transform, remote.transform, out var copy);
@@ -119,10 +134,17 @@ internal static class HeroEffects
         foreach (var particles in copy.GetComponentsInChildren<ParticleSystem>(true)) particles.Play();
 
         var animator = copy.GetComponent<tk2dSpriteAnimator>();
-        if (!animator) return;
+        if (!animator) return holder;
 
         var clip = clipName != null ? animator.GetClipByName(clipName) : animator.DefaultClip;
-        if (clip != null) animator.Play(clip);
+        if (clip == null) return holder;
+
+        // The component that hides the original once it finished is not part of the copy, it would stay on its last frame.
+        var ownRenderer = copy.GetComponent<MeshRenderer>();
+        if (hideWhenDone && ownRenderer) animator.AnimationCompleted = (_, _) => ownRenderer.enabled = false;
+
+        animator.Play(clip);
+        return holder;
     }
 
     private static void PlaySound(HeroController hero, Transform player, AudioClip? clip, float volume)

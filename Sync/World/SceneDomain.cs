@@ -27,6 +27,7 @@ internal sealed class SceneDomain : IWorldDomain
     private static readonly string[] FsmActivateEvents = { "QUICK BREAK", "ACTIVATE", "ACTIVATED", "DESTROY", "UNLOCK" };
 
     private const string ActivatedState = "Activated";
+    private const string WaitingState = "Idle";
 
     /// <summary>Persistent ints are mostly internal counters, only these are known to be progression.</summary>
     private static readonly (string Prefix, WorldCategory Category)[] SyncedInts =
@@ -269,6 +270,15 @@ internal sealed class SceneDomain : IWorldDomain
         foreach (var candidate in fsm.FsmStates)
         {
             if (candidate.Name != ActivatedState) continue;
+
+            // Only an object still waiting can skip ahead. A running one may hold the hero, as the weakness cutscene
+            // does, and leaving its state early would never give the controls back. It finishes by itself.
+            if (state != WaitingState)
+            {
+                Log.Debug($"Object {item.name} is busy in {state}, it stays until it finished");
+                return;
+            }
+
             Log.Debug($"Object {item.name} moved to its activated state");
             fsm.SetState(ActivatedState);
             return;

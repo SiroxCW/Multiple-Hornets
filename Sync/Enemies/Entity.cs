@@ -349,7 +349,20 @@ internal sealed class Entity
     public void ShowHitEffect(float direction, AttackTypes attackType)
     {
         if (Health.isDead || !GameObject.activeInHierarchy || _hitEffects == null) return;
-        _hitEffects.ReceiveHitEffect(new HitInstance { Direction = direction, AttackType = attackType });
+
+        Log.Debug($"Puppet {Name} shows a teammate's hit");
+
+        // The game shows a hit without damage as a weak one, which has neither flash nor sound.
+        _hitEffects.ReceiveHitEffect(new HitInstance
+        {
+            Direction = direction,
+            AttackType = attackType,
+            DamageDealt = 1,
+            Multiplier = 1f,
+            MagnitudeMultiplier = 1f,
+            IsHeroDamage = true,
+            HitEffectsType = EnemyHitEffectsProfile.EffectsTypes.Full,
+        });
     }
 
     public void ApplyHp(int hp)

@@ -181,7 +181,10 @@ internal static class EnemySync
             ActiveActionIndexRef(state) = i;
 
             var action = actions[i];
-            if (!action.Enabled)
+
+            // Facing someone means our hero here and the owner's hero there. The owner's facing is applied every
+            // frame, so these would see a wrong side forever and restart their turn animation each time.
+            if (!action.Enabled || action.GetType().Name.StartsWith("Face"))
             {
                 action.Finished = true;
                 continue;
