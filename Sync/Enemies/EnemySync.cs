@@ -38,6 +38,7 @@ internal static class EnemySync
     private const float InterestWindow = 1f;
     private const int MaxTransformsPerPacket = 50;
     private const int MaxEventsPerMessage = 120;
+    private const float AnimSyncInterval = 2f;
 
     private const byte EventState = 1;
     private const byte EventAnim = 2;
@@ -47,7 +48,7 @@ internal static class EnemySync
     private static readonly Dictionary<uint, Entity> Entities = new();
     private static readonly Dictionary<Fsm, FsmBinding> FsmBindings = new();
     private static readonly Dictionary<HealthManager, Entity> ByHealth = new();
-    private static readonly Dictionary<tk2dSpriteAnimator, Entity> ByAnimator = new();
+    private static readonly Dictionary<tk2dSpriteAnimator, (Entity Entity, int Index)> ByAnimator = new();
     private static readonly HashSet<uint> DeadIds = new();
     private static readonly HashSet<HealthManager> Ignored = new();
     private static readonly Dictionary<uint, ushort> OwnerOverrides = new();
@@ -249,9 +250,17 @@ internal static class EnemySync
 
     public static void OnAnimatorPlay(tk2dSpriteAnimator animator, tk2dSpriteAnimationClip clip)
     {
-        if (!_audience || ByAnimator.Count == 0 || !ByAnimator.TryGetValue(animator, out var entity) || entity.IsPuppet) return;
+        if (!_audience || ByAnimator.Count == 0 || !ByAnimator.TryGetValue(animator, out var target) || target.Entity.IsPuppet) return;
 
-        BeginEvent(EventAnim, entity).Put(clip.name);
+        WriteAnimEvent(target.Entity, target.Index, clip.name, restart: true);
+    }
+
+    private static void WriteAnimEvent(Entity entity, int index, string clip, bool restart)
+    {
+        var body = BeginEvent(EventAnim, entity);
+        body.Put((byte)index);
+        body.Put(clip);
+        body.Put(restart);
     }
 
     public static Entity? GetEntity(HealthManager health) =>
@@ -512,7 +521,7 @@ internal static class EnemySync
         var entity = Entity.Create(id, health, path);
         Entities[id] = entity;
         ByHealth[health] = entity;
-        if (entity.Animator) ByAnimator[entity.Animator!] = entity;
+        for (var i = 0; i < entity.Animators.Count && i < 255; i++) ByAnimator[entity.Animators[i]] = (entity, i);
         foreach (var binding in entity.Fsms) FsmBindings[binding.Fsm] = binding;
 
         if (!IsLocalOwner(id)) entity.SetPuppet(true);
@@ -619,6 +628,18 @@ internal static class EnemySync
     {
         if (!_audience || entity.Health.isDead) return;
 
+        // Animation starts are sent as they happen; this repairs puppets that started late or missed one.
+        var now = Time.realtimeSinceStartup;
+        if (now - entity.LastAnimSync > AnimSyncInterval && entity.GameObject.activeInHierarchy)
+        {
+            entity.LastAnimSync = now;
+            for (var i = 0; i < entity.Animators.Count && i < 255; i++)
+            {
+                var animator = entity.Animators[i];
+                if (animator && animator.Playing && animator.CurrentClip != null) WriteAnimEvent(entity, i, animator.CurrentClip.name, restart: false);
+            }
+        }
+
         var hp = entity.Health.hp;
         if (hp == entity.LastSentHp && !entity.ForceHpSend) return;
 
@@ -643,8 +664,10 @@ internal static class EnemySync
             var position = (Vector2)entity.Transform.position;
             var scaleX = entity.Transform.localScale.x;
             var rotation = entity.Transform.eulerAngles.z;
+            var flipX = entity.Sprite && entity.Sprite!.FlipX;
 
             var changed = (position - entity.LastSentPosition).sqrMagnitude > 0.0001f ||
+                          flipX != entity.LastSentFlipX ||
                           !Mathf.Approximately(scaleX, entity.LastSentScaleX) ||
                           Mathf.Abs(Mathf.DeltaAngle(rotation, entity.LastSentRotation)) > 0.5f ||
                           now - entity.LastTransformSend > TransformRefresh;
@@ -653,12 +676,14 @@ internal static class EnemySync
             entity.LastSentPosition = position;
             entity.LastSentScaleX = scaleX;
             entity.LastSentRotation = rotation;
+            entity.LastSentFlipX = flipX;
             entity.LastTransformSend = now;
 
             body.Put(entity.Id);
             body.Put(position);
             body.Put(scaleX);
             body.Put(rotation);
+            body.Put(flipX);
             count++;
 
             if (count >= MaxTransformsPerPacket)
@@ -881,8 +906,10 @@ internal static class EnemySync
                 }
                 case EventAnim:
                 {
+                    var animator = reader.GetByte();
                     var clip = reader.GetSafeString(128);
-                    entity?.ApplyAnimation(clip);
+                    var restart = reader.GetBool();
+                    entity?.ApplyAnimation(animator, clip, restart);
                     break;
                 }
                 case EventHp:
@@ -924,9 +951,10 @@ internal static class EnemySync
             var position = reader.GetVector2();
             var scaleX = reader.GetFloat();
             var rotation = reader.GetFloat();
+            var flipX = reader.GetBool();
 
             if (!Entities.TryGetValue(id, out var entity) || !entity.IsValid || !entity.IsPuppet || OwnerOf(id) != sender) continue;
-            entity.ApplyRemoteTransform(senderTime, position, scaleX, rotation, now);
+            entity.ApplyRemoteTransform(senderTime, position, scaleX, rotation, flipX, now);
         }
     }
 

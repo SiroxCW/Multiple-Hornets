@@ -4,6 +4,7 @@ using HutongGames.PlayMaker;
 using LiteNetLib.Utils;
 using MultipleHornetsMod.Core;
 using MultipleHornetsMod.Game.Players;
+using MultipleHornetsMod.Net;
 using UnityEngine;
 
 namespace MultipleHornetsMod.Sync.Enemies;
@@ -52,8 +53,10 @@ internal struct EntitySnapshot
     public Vector2 Position;
     public float ScaleX;
     public float Rotation;
+    public bool FlipX;
     public int Hp;
     public short[] States;
+    public string[] Clips;
 
     public static EntitySnapshot Read(NetDataReader reader)
     {
@@ -63,12 +66,17 @@ internal struct EntitySnapshot
             Position = new Vector2(reader.GetFloat(), reader.GetFloat()),
             ScaleX = reader.GetFloat(),
             Rotation = reader.GetFloat(),
+            FlipX = reader.GetBool(),
             Hp = reader.GetInt(),
         };
 
         var count = reader.GetByte();
         snapshot.States = new short[count];
         for (var i = 0; i < count; i++) snapshot.States[i] = reader.GetShort();
+
+        var clips = reader.GetByte();
+        snapshot.Clips = new string[clips];
+        for (var i = 0; i < clips; i++) snapshot.Clips[i] = reader.GetSafeString(128);
         return snapshot;
     }
 }
@@ -90,6 +98,8 @@ internal sealed class Entity
     private bool _hasRemoteTransform;
     private float _remoteScaleX = 1f;
     private float _remoteRotation;
+    private bool _remoteFlipX;
+    private readonly List<MonoBehaviour> _enabledMovers = new();
     private float _deathAppliedAt = -1f;
     private int _deathAttempts;
 
@@ -101,7 +111,20 @@ internal sealed class Entity
         Name = GameObject.name;
         Transform = health.transform;
         Body = health.GetComponent<Rigidbody2D>();
-        Animator = health.GetComponent<tk2dSpriteAnimator>();
+        Sprite = health.GetComponent<tk2dBaseSprite>();
+
+        // These move and animate an enemy by themselves, which on a puppet fights what the owner does.
+        Movers.AddRange(health.GetComponents<Crawler>());
+        Movers.AddRange(health.GetComponents<Walker>());
+        Movers.AddRange(health.GetComponents<WalkerV2>());
+        Movers.AddRange(health.GetComponents<Climber>());
+
+        foreach (var animator in health.GetComponentsInChildren<tk2dSpriteAnimator>(true))
+        {
+            // Effects parented to the enemy at runtime differ between games, and nested enemies sync themselves.
+            if (animator.name.Contains("(Clone)") || animator.GetComponentInParent<HealthManager>(true) != health) continue;
+            Animators.Add(animator);
+        }
     }
 
     public uint Id { get; }
@@ -110,7 +133,9 @@ internal sealed class Entity
     public GameObject GameObject { get; }
     public Transform Transform { get; }
     public Rigidbody2D? Body { get; }
-    public tk2dSpriteAnimator? Animator { get; }
+    public tk2dBaseSprite? Sprite { get; }
+    public List<tk2dSpriteAnimator> Animators { get; } = new();
+    public List<MonoBehaviour> Movers { get; } = new();
     public List<FsmBinding> Fsms { get; } = new();
     public bool IsBossLike { get; private set; }
     public bool IsPuppet { get; private set; }
@@ -141,6 +166,8 @@ internal sealed class Entity
     public float LastSentScaleX { get; set; }
     public float LastSentRotation { get; set; }
     public float LastTransformSend { get; set; } = -100f;
+    public bool LastSentFlipX { get; set; }
+    public float LastAnimSync { get; set; }
 
     public static Entity Create(uint id, HealthManager health, string path)
     {
@@ -178,8 +205,23 @@ internal sealed class Entity
                 Body.linearVelocity = Vector2.zero;
             }
 
+            _enabledMovers.Clear();
+            foreach (var mover in Movers)
+            {
+                if (!mover.enabled) continue;
+                _enabledMovers.Add(mover);
+                mover.enabled = false;
+            }
+
             return;
         }
+
+        foreach (var mover in _enabledMovers)
+        {
+            if (mover) mover.enabled = true;
+        }
+
+        _enabledMovers.Clear();
 
         if (Body && _bodyStored)
         {
@@ -238,23 +280,32 @@ internal sealed class Entity
         EnemySync.ForceSwitchState(binding.Fsm, target);
     }
 
-    public void ApplyRemoteTransform(double senderTime, Vector2 position, float scaleX, float rotation, double now)
+    public void ApplyRemoteTransform(double senderTime, Vector2 position, float scaleX, float rotation, bool flipX, double now)
     {
         _interpolator.Add(senderTime, position, now);
         _remoteScaleX = scaleX;
         _remoteRotation = rotation;
+        _remoteFlipX = flipX;
         _hasRemoteTransform = true;
         LastRemoteUpdate = Time.realtimeSinceStartup;
     }
 
-    public void ApplyAnimation(string clipName)
+    /// <summary>
+    /// Plays what the owner plays. A check of what is playing anyway (<paramref name="restart"/> false) does not
+    /// restart a clip that already ended here.
+    /// </summary>
+    public void ApplyAnimation(int index, string clipName, bool restart)
     {
-        if (!Animator) return;
-        var current = Animator!.CurrentClip;
-        if (current != null && current.name == clipName && Animator.Playing) return;
+        if (index < 0 || index >= Animators.Count) return;
 
-        var clip = Animator.GetClipByName(clipName);
-        if (clip != null) Animator.Play(clip);
+        var animator = Animators[index];
+        if (!animator || !animator.gameObject.activeInHierarchy) return;
+
+        var current = animator.CurrentClip;
+        if (current != null && current.name == clipName && (animator.Playing || !restart)) return;
+
+        var clip = animator.GetClipByName(clipName);
+        if (clip != null) animator.Play(clip);
     }
 
     public void ApplyHp(int hp)
@@ -380,10 +431,16 @@ internal sealed class Entity
         _interpolator.Clear();
         _remoteScaleX = snapshot.ScaleX;
         _remoteRotation = snapshot.Rotation;
+        _remoteFlipX = snapshot.FlipX;
 
         for (var i = 0; i < snapshot.States.Length && i < Fsms.Count; i++)
         {
             if (snapshot.States[i] >= 0) ForceState(i, snapshot.States[i], reenter: false);
+        }
+
+        for (var i = 0; i < snapshot.Clips.Length; i++)
+        {
+            if (snapshot.Clips[i].Length > 0) ApplyAnimation(i, snapshot.Clips[i], restart: false);
         }
     }
 
@@ -396,11 +453,19 @@ internal sealed class Entity
         writer.Put(position.y);
         writer.Put(Transform.localScale.x);
         writer.Put(Transform.eulerAngles.z);
+        writer.Put(Sprite && Sprite!.FlipX);
         writer.Put(Health.hp);
         writer.Put((byte)Mathf.Min(Fsms.Count, 255));
         for (var i = 0; i < Fsms.Count && i < 255; i++)
         {
             writer.Put((short)(Fsms[i].IsRunning ? Fsms[i].ActiveStateIndex : -1));
+        }
+
+        writer.Put((byte)Mathf.Min(Animators.Count, 255));
+        for (var i = 0; i < Animators.Count && i < 255; i++)
+        {
+            var clip = Animators[i] ? Animators[i].CurrentClip : null;
+            writer.Put(clip != null && Animators[i].Playing ? clip.name : "");
         }
     }
 
@@ -435,6 +500,14 @@ internal sealed class Entity
             if (binding.DesiredState >= 0 && binding.IsRunning) ForceState(binding.Index, binding.DesiredState, reenter: false);
         }
 
+        foreach (var mover in Movers)
+        {
+            // FSM actions start these again, and a crawler keeps moving by a coroutine even while disabled.
+            if (!mover.enabled && mover is not Crawler { IsCrawling: true }) continue;
+            mover.enabled = false;
+            if (mover is Crawler crawler) crawler.StopCrawling();
+        }
+
         // FSM actions sometimes switch the body back to dynamic; physics must never move a puppet.
         if (Body && Body!.bodyType != RigidbodyType2D.Kinematic)
         {
@@ -467,6 +540,8 @@ internal sealed class Entity
             scale.x = _remoteScaleX;
             Transform.localScale = scale;
         }
+
+        if (Sprite && Sprite!.FlipX != _remoteFlipX) Sprite.FlipX = _remoteFlipX;
 
         var euler = Transform.eulerAngles;
         if (Mathf.Abs(Mathf.DeltaAngle(euler.z, _remoteRotation)) > 0.1f)
