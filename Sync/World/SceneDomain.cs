@@ -26,6 +26,8 @@ internal sealed class SceneDomain : IWorldDomain
     /// <summary>Events that make a persistent FSM jump to its "already activated" state.</summary>
     private static readonly string[] FsmActivateEvents = { "QUICK BREAK", "ACTIVATE", "ACTIVATED", "DESTROY", "UNLOCK" };
 
+    private const string ActivatedState = "Activated";
+
     /// <summary>Persistent ints are mostly internal counters, only these are known to be progression.</summary>
     private static readonly (string Prefix, WorldCategory Category)[] SyncedInts =
     {
@@ -257,6 +259,17 @@ internal sealed class SceneDomain : IWorldDomain
         {
             if (fsm.ActiveStateName != state) break;
             fsm.SendEvent(fsmEvent);
+        }
+
+        // Some objects only listen for these while loading (a berry waiting to be hit does not), so they would stay
+        // in the room and could be used a second time. The state they load into is where they have to end up.
+        if (fsm.ActiveStateName != state || state == ActivatedState) return;
+        foreach (var candidate in fsm.FsmStates)
+        {
+            if (candidate.Name != ActivatedState) continue;
+            Log.Debug($"Object {item.name} moved to its activated state");
+            fsm.SetState(ActivatedState);
+            return;
         }
     }
 

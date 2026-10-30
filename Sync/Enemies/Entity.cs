@@ -337,8 +337,12 @@ internal sealed class Entity
         var current = animator.CurrentClip;
         if (current != null && current.name == clipName && (animator.Playing || !restart)) return;
 
+        // Starts are sent as they happen, so a check finding something else means this puppet missed or lost one.
+        if (!restart) Log.Debug($"Puppet {Name} shows {current?.name ?? "nothing"} on animator {index}, the owner plays {clipName}");
+
         var clip = animator.GetClipByName(clipName);
         if (clip != null) animator.Play(clip);
+        else Log.Debug($"Puppet {Name} has no clip {clipName} on animator {index}");
     }
 
     /// <summary>Flash and blood of a hit somebody else dealt. The damage itself arrives from the owner.</summary>
