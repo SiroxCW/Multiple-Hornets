@@ -179,6 +179,7 @@ internal sealed class EntityServer
         writer.Put(player.Id);
         writer.Put(scene);
         writer.Put(id);
+        writer.Put(reader.GetBool());
         _server.Send(target, writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
     }
 

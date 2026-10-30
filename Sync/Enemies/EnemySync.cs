@@ -35,6 +35,10 @@ internal static class EnemySync
     private const float InterestClaimRange = 15f;
     private const float BossInterestClaimRange = 30f;
     private const float InterestWindow = 1f;
+    private const float OwnDecisionDelay = 1.5f;
+    private const float OwnSingleDecisionDelay = 3.5f;
+    private const float OwnDecisionWindow = 5f;
+    private const int OwnDecisionRepeats = 3;
     private const int MaxTransformsPerPacket = 50;
     private const int MaxEventsPerMessage = 120;
     private const float AnimSyncInterval = 2f;
@@ -207,8 +211,10 @@ internal static class EnemySync
         return true;
     }
 
+    /// <summary>What a dead enemy still does (a death sequence of its own) is not the owner's to decide anymore.</summary>
     public static bool IsPuppetFsm(Fsm fsm) =>
-        FsmBindings.Count > 0 && FsmBindings.TryGetValue(fsm, out var binding) && binding.Entity.IsPuppet;
+        FsmBindings.Count > 0 && FsmBindings.TryGetValue(fsm, out var binding) && binding.Entity.IsPuppet &&
+        binding.Entity.IsValid && !binding.Entity.Health.isDead;
 
     /// <summary>
     /// A puppet refused a transition. Events an FSM sends itself (timers, random choices, FINISHED) are the
@@ -218,18 +224,27 @@ internal static class EnemySync
     public static void OnPuppetTransitionBlocked(Fsm fsm, FsmTransition transition)
     {
         var fsmEvent = transition?.FsmEvent;
-        if (fsmEvent == null || fsmEvent == FsmEvent.Finished) return;
-        if (!FsmBindings.TryGetValue(fsm, out var binding)) return;
+        if (fsmEvent == null || !FsmBindings.TryGetValue(fsm, out var binding)) return;
 
-        // Messages between the FSMs of the same enemy are internal; they happen when owner states are replayed.
+        var now = Time.realtimeSinceStartup;
         var sender = Fsm.EventData.SentByFsm;
-        if (sender == fsm || (sender != null && FsmBindings.TryGetValue(sender, out var senderBinding) &&
-                              senderBinding.Entity == binding.Entity))
+        if (fsmEvent == FsmEvent.Finished || sender == fsm)
         {
+            if (binding.OwnDecisionState != fsm.ActiveState || now - binding.LastOwnDecision > OwnDecisionWindow)
+            {
+                binding.OwnDecisionState = fsm.ActiveState;
+                binding.OwnDecisionTime = now;
+                binding.OwnDecisionCount = 0;
+            }
+
+            binding.OwnDecisionCount++;
+            binding.LastOwnDecision = now;
             return;
         }
 
-        var now = Time.realtimeSinceStartup;
+        // Messages between the FSMs of the same enemy are internal; they happen when owner states are replayed.
+        if (sender != null && FsmBindings.TryGetValue(sender, out var senderBinding) && senderBinding.Entity == binding.Entity) return;
+
         binding.BlockedEvent = fsmEvent;
         binding.BlockedEventTime = now;
         binding.Entity.LastInterest = now;
@@ -748,7 +763,10 @@ internal static class EnemySync
         var requester = reader.GetUShort();
         var scene = reader.GetSafeString(128);
         var id = reader.GetUInt();
+        var triggered = reader.GetBool();
         if (scene != _scene) return;
+
+        Log.Debug($"Enemy {id:X8} claimed by {requester}, triggered={triggered}");
 
         // An enemy we do not have, or one that is inactive here, cannot be simulated by us at all.
         if (!Entities.TryGetValue(id, out var entity) || !entity.IsValid)
@@ -769,8 +787,10 @@ internal static class EnemySync
         var now = Time.realtimeSinceStartup;
         if (now - entity.LastLocalEngage < EngageTimeout || now - entity.LastOwnerChange < OwnerChangeCooldown) return;
 
+        // Something at their end woke it that does not exist at ours, so distance does not matter: here it would
+        // keep waiting for our hero, like a boss that only starts when its owner is in the room.
         var hero = HeroController.SilentInstance;
-        if (hero && entity.GameObject.activeInHierarchy)
+        if (!triggered && hero && entity.GameObject.activeInHierarchy)
         {
             var ownDistance = entity.DistanceTo(hero.transform.position);
             var requesterDistance = float.MaxValue;
@@ -834,17 +854,37 @@ internal static class EnemySync
 
             var distance = entity.DistanceTo(heroPosition);
             var stale = now - entity.LastRemoteUpdate > StaleTime && distance <= StaleClaimRange;
-            var interested = now - entity.LastInterest < InterestWindow &&
-                             distance <= (entity.IsBossLike ? BossInterestClaimRange : InterestClaimRange);
-            if (!stale && !interested) continue;
+            var inRange = distance <= (entity.IsBossLike ? BossInterestClaimRange : InterestClaimRange);
+            var interested = now - entity.LastInterest < InterestWindow && inRange;
+            var triggered = inRange && HasOwnDecision(entity, now);
+            if (!stale && !interested && !triggered) continue;
+
+            if (triggered) Log.Debug($"Enemy {entity.Name} reacts to us but not at its owner, claiming it");
+            foreach (var binding in entity.Fsms) binding.OwnDecisionState = null;
 
             entity.LastRemoteUpdate = now;
             entity.LastInterest = -100f;
             var writer = GameClient.Begin(Msg.EntityClaim);
             writer.Put(_scene);
             writer.Put(entity.Id);
+            writer.Put(triggered);
             Session.Client?.Send(writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
         }
+    }
+
+    /// <summary>The puppet wanted to move on a while ago and the owner's copy still has not.</summary>
+    private static bool HasOwnDecision(Entity entity, float now)
+    {
+        foreach (var binding in entity.Fsms)
+        {
+            if (binding.OwnDecisionState == null || binding.OwnDecisionState != binding.Fsm.ActiveState) continue;
+
+            // A sensor keeps firing. A single event can also just be a random wait that ended earlier here.
+            var delay = binding.OwnDecisionCount >= OwnDecisionRepeats ? OwnDecisionDelay : OwnSingleDecisionDelay;
+            if (now - binding.OwnDecisionTime >= delay && now - binding.LastOwnDecision < OwnDecisionWindow) return true;
+        }
+
+        return false;
     }
 
     private static void OnEntityEvents(NetDataReader reader)

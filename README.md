@@ -78,5 +78,6 @@ wrong in co-op, the files of all players from that session are what is needed to
 
 - Enemies created at runtime (for example some summons) are not shared: each player fights their own copy.
 - Enemies always target the player who currently owns them.
-- Only needle attacks show their effect on other players, silk skills and tools do not yet.
+- Only needle attacks, damage and the normal heal show their effects on other players. Silk skills, tools and the
+  heals of some crests do not yet.
 - Direct IP connections only for now (no Steam lobbies).

@@ -49,7 +49,7 @@ internal sealed class ModuleClient
         Client.Register(Msg.PlayerAttack, r => Events.Add($"attack from {r.GetUShort()} {r.GetString()}"));
         Client.Register(Msg.EntityOwner, r => Events.Add($"owner {r.GetString()} {r.GetUInt()} {r.GetUShort()}"));
         Client.Register(Msg.EntityHit, r => Events.Add($"hit from {r.GetUShort()} id {r.GetUInt()} dmg {r.GetInt()}"));
-        Client.Register(Msg.EntityClaim, r => Events.Add($"claim by {r.GetUShort()} {r.GetString()} {r.GetUInt()}"));
+        Client.Register(Msg.EntityClaim, r => Events.Add($"claim by {r.GetUShort()} {r.GetString()} {r.GetUInt()} triggered {r.GetBool()}"));
         Client.Register(Msg.EntitySnapshot, r => Events.Add($"snapshot from {r.GetUShort()} {r.GetString()} {r.GetUShort()}"));
         Client.Register(Msg.EntityEvents, r => Events.Add($"events from {r.GetUShort()} {r.GetString()}"));
         Client.Register(Msg.EntitySnapshotRequest, r => Events.Add($"snaprequest by {r.GetUShort()} {r.GetString()} {r.GetUInt()}"));
@@ -214,12 +214,12 @@ internal static class ServerModuleTests
         check(b.Events.Contains($"hit from {a.Id} id 5 dmg 7") && a.Events.Contains($"hit from {b.Id} id 6 dmg 3"),
             "hits are routed to the enemy's owner");
 
-        b.Send(Msg.EntityClaim, Protocol.ChannelEntity, w => { w.Put("R1"); w.Put(6u); });
+        b.Send(Msg.EntityClaim, Protocol.ChannelEntity, w => { w.Put("R1"); w.Put(6u); w.Put(true); });
         a.Send(Msg.EntityEvents, Protocol.ChannelEntity, w => { w.Put("R1"); w.Put((ushort)0); });
         a.Send(Msg.EntitySnapshot, Protocol.ChannelEntity, w => { w.Put(b.Id); w.Put("R1"); w.Put((ushort)0); });
         a.Send(Msg.EntitySnapshot, Protocol.ChannelEntity, w => { w.Put(late.Id); w.Put("R1"); w.Put((ushort)0); });
         Pump(200);
-        check(a.Events.Contains($"claim by {b.Id} R1 6"), "claims reach the owner");
+        check(a.Events.Contains($"claim by {b.Id} R1 6 triggered True"), "claims reach the owner");
         b.Send(Msg.EntitySnapshotRequest, Protocol.ChannelEntity, w => { w.Put("R1"); w.Put(6u); });
         Pump(200);
         check(a.Events.Contains($"snaprequest by {b.Id} R1 6"), "snapshot requests reach the owner");
@@ -250,7 +250,7 @@ internal static class ServerModuleTests
         check(a.Events.Contains("dead R1 [77]"), "player re-entering an occupied room learns which enemies are dead, other rooms do not count");
 
         b.Events.Clear(); a.Events.Clear();
-        a.Send(Msg.EntityClaim, Protocol.ChannelEntity, w => { w.Put("R1"); w.Put(77u); });
+        a.Send(Msg.EntityClaim, Protocol.ChannelEntity, w => { w.Put("R1"); w.Put(77u); w.Put(false); });
         Pump(200);
         check(a.Events.Contains("died R1 77") && !b.Events.Any(e => e.StartsWith("claim")), "claiming a dead enemy is answered as dead, not passed to the owner");
 

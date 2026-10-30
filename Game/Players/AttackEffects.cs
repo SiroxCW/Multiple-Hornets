@@ -84,7 +84,7 @@ internal static class AttackEffects
         holder.transform.SetParent(player, false);
 
         var copy = UnityEngine.Object.Instantiate(source.gameObject, holder.transform);
-        Strip(copy);
+        Strip(copy, keepChildren: false);
 
         copy.SetActive(true);
         copy.transform.localPosition = hero.InverseTransformPoint(source.position);
@@ -112,8 +112,26 @@ internal static class AttackEffects
         animator.Play(clip, Mathf.Epsilon, clip.fps);
     }
 
-    /// <summary>Only the sprite, its animation and the sound stay.</summary>
-    private static void Strip(GameObject copy)
+    /// <summary>
+    /// Makes a copy of an effect below the hero that can only be seen. Returns the copy, inactive until the
+    /// components of the original are gone; activating the returned holder starts it.
+    /// </summary>
+    public static GameObject CopyVisual(Transform source, Transform hero, Transform player, out GameObject copy)
+    {
+        var holder = new GameObject("Multiple Hornets Effect");
+        holder.SetActive(false);
+        holder.transform.SetParent(player, false);
+
+        copy = UnityEngine.Object.Instantiate(source.gameObject, holder.transform);
+        Strip(copy, keepChildren: true);
+        copy.SetActive(true);
+        copy.transform.localPosition = hero.InverseTransformPoint(source.position);
+        copy.transform.localRotation = source.localRotation;
+        return holder;
+    }
+
+    /// <summary>Only sprites, their animation, particles and the sound stay.</summary>
+    private static void Strip(GameObject copy, bool keepChildren)
     {
         var behaviours = copy.GetComponentsInChildren<MonoBehaviour>(true);
         for (var i = behaviours.Length - 1; i >= 0; i--)
@@ -124,7 +142,8 @@ internal static class AttackEffects
 
         foreach (var collider in copy.GetComponentsInChildren<Collider2D>(true)) UnityEngine.Object.DestroyImmediate(collider);
 
-        // Children are effects of the real attack (thunks, bounces, imbuements), which have no business here.
+        // Children of an attack are its effects (thunks, bounces, imbuements), which have no business here.
+        if (keepChildren) return;
         for (var i = copy.transform.childCount - 1; i >= 0; i--) UnityEngine.Object.DestroyImmediate(copy.transform.GetChild(i).gameObject);
     }
 }

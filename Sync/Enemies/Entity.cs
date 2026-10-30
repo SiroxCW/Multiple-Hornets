@@ -40,6 +40,17 @@ internal sealed class FsmBinding
 
     public int ActiveStateIndex => IndexOf(Fsm.ActiveState);
 
+    /// <summary>
+    /// The state in which this puppet wanted to move on by itself, and since when. The owner's copy does the same
+    /// moments later if both see the same world. If it does not, something only we have caused it, usually our hero
+    /// being somewhere the owner's hero is not.
+    /// </summary>
+    public FsmState? OwnDecisionState { get; set; }
+
+    public float OwnDecisionTime { get; set; }
+    public int OwnDecisionCount { get; set; }
+    public float LastOwnDecision { get; set; } = -100f;
+
     /// <summary>The last event a puppet refused that came from outside this FSM (a sensor, trigger or hit).</summary>
     public FsmEvent? BlockedEvent { get; set; }
 
@@ -125,6 +136,7 @@ internal sealed class Entity
         {
             // Effects parented to the enemy at runtime differ between games, and nested enemies sync themselves.
             if (animator.name.Contains("(Clone)") || animator.GetComponentInParent<HealthManager>(true) != health) continue;
+            if (IsPartOfCorpse(health, animator.transform)) continue;
             Animators.Add(animator);
         }
     }
@@ -179,6 +191,7 @@ internal sealed class Entity
         {
             // FSMs below a nested enemy belong to that enemy.
             if (fsm.GetComponentInParent<HealthManager>(true) != health || fsm.Fsm == null) continue;
+            if (IsPartOfCorpse(health, fsm.transform)) continue;
             entity.Fsms.Add(new FsmBinding(entity, entity.Fsms.Count, fsm));
         }
 
@@ -186,6 +199,23 @@ internal sealed class Entity
         entity.IsBossLike = health.hp >= 100 || health.bigEnemyDeath || lowerPath.Contains("boss");
         entity.LastRemoteUpdate = Time.realtimeSinceStartup;
         return entity;
+    }
+
+    /// <summary>
+    /// Bigger enemies keep their corpse ready as an inactive child. It runs its own death sequence once the enemy
+    /// has died, in every game by itself, and is no part of what the owner decides.
+    /// </summary>
+    private static bool IsPartOfCorpse(HealthManager health, Transform transform)
+    {
+        var effects = health.GetComponent<EnemyDeathEffects>();
+        if (!effects || effects.instantiatedCorpses == null) return false;
+
+        foreach (var corpse in effects.instantiatedCorpses)
+        {
+            if (corpse && transform.IsChildOf(corpse.transform)) return true;
+        }
+
+        return false;
     }
 
     public void SetPuppet(bool puppet)
@@ -276,6 +306,7 @@ internal sealed class Entity
         }
 
         binding.DesiredState = -1;
+        binding.OwnDecisionState = null;
         var target = states[stateIndex];
         if (!reenter && binding.Fsm.ActiveState == target) return;
 

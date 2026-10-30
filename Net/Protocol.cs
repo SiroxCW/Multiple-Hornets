@@ -8,7 +8,7 @@ internal static class Protocol
     /// <summary>
     /// Bumped whenever the wire format changes. Client and server must match exactly.
     /// </summary>
-    public const int Version = 3;
+    public const int Version = 4;
 
     public const string AppKey = "MultipleHornets";
     public const int DefaultPort = 26960;
@@ -48,6 +48,7 @@ internal enum Msg : byte
     PlayerAnim = 12,
     Chat = 13,
     PlayerAttack = 14,
+    PlayerHurt = 15,
 
     // Progression sync
     WorldChanges = 30,

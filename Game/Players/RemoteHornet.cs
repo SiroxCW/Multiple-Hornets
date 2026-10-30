@@ -8,10 +8,20 @@ namespace MultipleHornetsMod.Game.Players;
 /// </summary>
 internal sealed class RemoteHornet : MonoBehaviour
 {
+    private const float HurtFlashDuration = 0.15f;
+    private const float HurtDuration = 1.3f;
+    private const float HurtBlinkInterval = 0.1f;
+
+    private static readonly Color HurtColor = new(1f, 0.35f, 0.35f);
+    private static readonly Color HurtBlinkColor = new(1f, 1f, 1f, 0.45f);
+
     private readonly SnapshotInterpolator _interpolator = new();
     private tk2dSpriteAnimator _animator = null!;
     private MeshRenderer _renderer = null!;
     private tk2dSpriteAnimation? _baseLibrary;
+    private tk2dSprite _sprite = null!;
+    private float _hurtTime = -100f;
+    private bool _tinted;
     private bool _remoteVisible = true;
 
     public ushort PlayerId { get; private set; }
@@ -56,6 +66,7 @@ internal sealed class RemoteHornet : MonoBehaviour
         remote.PlayerName = player.Name;
         remote._animator = animator;
         remote._renderer = renderer;
+        remote._sprite = sprite;
         remote._baseLibrary = heroAnimator.Library;
         renderer.enabled = false;
         return remote;
@@ -79,6 +90,26 @@ internal sealed class RemoteHornet : MonoBehaviour
         if (clip == null) return;
 
         _animator.Play(clip, startTime, fps);
+        HeroEffects.OnRemoteClip(this, clipName);
+    }
+
+    /// <summary>The red flash of a hit, then the blinking of the moment Hornet cannot be hurt again.</summary>
+    public void FlashHurt() => _hurtTime = Time.time;
+
+    private void UpdateHurtTint()
+    {
+        var age = Time.time - _hurtTime;
+        if (age > HurtDuration)
+        {
+            if (!_tinted) return;
+            _tinted = false;
+            _sprite.color = Color.white;
+            return;
+        }
+
+        _tinted = true;
+        if (age < HurtFlashDuration) _sprite.color = HurtColor;
+        else _sprite.color = (int)(age / HurtBlinkInterval) % 2 == 0 ? Color.white : HurtBlinkColor;
     }
 
     /// <summary>Forget old positions, used when the player changes rooms.</summary>
@@ -93,6 +124,7 @@ internal sealed class RemoteHornet : MonoBehaviour
         }
 
         transform.position = _interpolator.Sample(Time.realtimeSinceStartupAsDouble);
+        UpdateHurtTint();
         _renderer.enabled = _remoteVisible;
     }
 }
