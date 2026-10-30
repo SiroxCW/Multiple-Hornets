@@ -104,7 +104,7 @@ internal static class RemoteHit
     }
 
     /// <summary>A stand-in for the attacker, hit effects and knockback are calculated from its position.</summary>
-    private static GameObject GetSource()
+    public static GameObject GetSource()
     {
         if (_source) return _source!;
 

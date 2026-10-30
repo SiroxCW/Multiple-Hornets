@@ -45,12 +45,16 @@ internal static class HitSync
         if (!ScenePaths.TryGetPath(target, out var path)) return;
 
         Log.Debug($"Hit on object {path}");
+        Send(path, damager.attackType, damager.GetDirection(), hero.transform.position, isFirstHit);
+    }
 
+    public static void Send(string path, AttackTypes attackType, float direction, Vector2 attackerPosition, bool isFirstHit)
+    {
         var writer = GameClient.Begin(Msg.WorldHit);
         writer.Put(path);
-        writer.Put((byte)damager.attackType);
-        writer.Put(damager.GetDirection());
-        writer.Put((Vector2)hero.transform.position);
+        writer.Put((byte)attackType);
+        writer.Put(direction);
+        writer.Put(attackerPosition);
         writer.Put(isFirstHit);
         Session.Client?.Send(writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
     }
@@ -70,6 +74,8 @@ internal static class HitSync
             Log.Debug($"Hit on object {path} that does not exist here");
             return;
         }
+
+        if (BerrySync.TryBreak(target!, position)) return;
 
         RemoteHit.ApplyToObject(target!, attackType, direction, position, isFirstHit);
     }

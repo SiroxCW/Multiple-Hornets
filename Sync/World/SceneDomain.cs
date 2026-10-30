@@ -254,6 +254,8 @@ internal sealed class SceneDomain : IWorldDomain
         var fsm = item.fsm;
         if (!fsm) return;
 
+        BerrySync.RemoveDropped(fsm);
+
         var state = fsm.ActiveStateName;
         foreach (var fsmEvent in FsmActivateEvents)
         {

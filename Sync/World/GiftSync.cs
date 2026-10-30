@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using HarmonyLib;
+using HutongGames.PlayMaker;
+using HutongGames.PlayMaker.Actions;
 using MultipleHornetsMod.Core;
 using MultipleHornetsMod.Game;
 
@@ -20,6 +22,7 @@ internal static class GiftSync
 {
     private static readonly HashSet<string> Handled = new();
     private static CollectableItemPickup? _pickup;
+    private static PersistentBoolItem? _fsmSource;
     private static ShopItem? _shop;
     private static bool _catchUp;
     private static int _counter;
@@ -40,6 +43,10 @@ internal static class GiftSync
     }
 
     public static void OnPickupEnd() => _pickup = null;
+
+    public static void OnFsmCollectStart(Fsm fsm) => _fsmSource = BerrySync.FindSource(fsm);
+
+    public static void OnFsmCollectEnd() => _fsmSource = null;
 
     public static void OnShopStart(ShopItem shop)
     {
@@ -66,16 +73,20 @@ internal static class GiftSync
         WorldSync.Changes.Report(key, gained, WorldCategory.Items, item.name);
     }
 
+    private static string PersistentKey(PersistentBoolItem persistent)
+    {
+        var data = persistent.ItemData;
+        return $"{WorldKeys.GiftPickup}{data.SceneName}|{data.ID}";
+    }
+
     private static string? GiftKey(CollectableItem item)
     {
+        if (_fsmSource) return PersistentKey(_fsmSource!);
+
         if (_pickup)
         {
             var persistent = _pickup!.persistent;
-            if (persistent)
-            {
-                var data = persistent.ItemData;
-                return $"{WorldKeys.GiftPickup}{data.SceneName}|{data.ID}";
-            }
+            if (persistent) return PersistentKey(persistent);
 
             if (!string.IsNullOrEmpty(_pickup.playerDataBool)) return WorldKeys.GiftPlayerDataPickup + _pickup.playerDataBool;
             if (item.IsUnique) return WorldKeys.GiftUnique + item.name;
@@ -165,6 +176,24 @@ internal static class PickupActionPatch
     }
 
     private static void Finalizer() => GiftSync.OnPickupEnd();
+}
+
+[HarmonyPatch(typeof(CollectableItemCollect), "DoAction")]
+internal static class FsmCollectPatch
+{
+    private static void Prefix(CollectableItemCollect __instance)
+    {
+        try
+        {
+            GiftSync.OnFsmCollectStart(__instance.Fsm);
+        }
+        catch (Exception e)
+        {
+            Log.Exception("FsmCollectPatch", e);
+        }
+    }
+
+    private static void Finalizer() => GiftSync.OnFsmCollectEnd();
 }
 
 [HarmonyPatch(typeof(ShopItem), nameof(ShopItem.SetPurchased))]
