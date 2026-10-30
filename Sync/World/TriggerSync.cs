@@ -9,6 +9,7 @@ using MultipleHornetsMod.Game;
 using MultipleHornetsMod.Net;
 using MultipleHornetsMod.Sync.Enemies;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace MultipleHornetsMod.Sync.World;
 
@@ -20,6 +21,9 @@ namespace MultipleHornetsMod.Sync.World;
 /// </summary>
 internal static class TriggerSync
 {
+    private const string ReturnBattleFsm = "Start Return Battle";
+    private const string OpenGatesEvent = "BG OPEN";
+
     /// <summary>Only these are shared. Most objects with a trigger are personal: reminders, sounds, area titles.</summary>
     private static readonly Rule[] Rules =
     {
@@ -34,6 +38,21 @@ internal static class TriggerSync
         new(new[] { "swamp trap wire" }, new[] { "Idle", "Check On Camera" }, new[] { "Touch", "Snap" }),
         new(new[] { "hunter trap plate" }, new[] { "Idle", "Cam Check" }, new[] { "Step" }),
         new(new[] { "dust trap spike plate" }, new[] { "Idle" }, new[] { "Step" }),
+
+        // A boss waiting in a web or returning to its arena: without this, one player has the arena and the others
+        // still see the web, next to the real boss that follows the owner.
+        new(new[] { "thick silk vines" }, new[] { "Idle" }, new[] { "Destroy" }),
+        new(new[] { "return battle" }, new[] { "Idle" }, new[] { "Scene Setup" }),
+
+        // One silk heart for everybody, it takes its collector into a memory and only counts when that ends.
+        new(new[] { "silk heart" },
+            new[]
+            {
+                "Init", "Pause", "Appear Start", "Shell Appear", "Heart Appear", "Form Effects", "Fall Down",
+                "Bob Up", "Bob Down", "Bob Up N", "Bob Down N", "Reappear",
+            },
+            new[] { "Take Control" },
+            collectedByOne: true),
     };
 
     /// <summary>This runs for every state of every FSM in the game, the state name rules nearly all of them out.</summary>
@@ -59,7 +78,14 @@ internal static class TriggerSync
         if (!Session.Players.Values.Any(player => player.Scene == scene)) return;
 
         var hero = HeroController.SilentInstance;
-        if (!hero || !ScenePaths.TryGetPath(go, out var path)) return;
+        if (!hero) return;
+
+        // Where something collectable hangs in the room does not matter, its name is enough to find it.
+        if (!ScenePaths.TryGetPath(go, out var path))
+        {
+            if (!rule.CollectedByOne) return;
+            path = go.name;
+        }
 
         Log.Debug($"Object {path} {fsm.Name} -> {state.Name}");
 
@@ -78,6 +104,16 @@ internal static class TriggerSync
         var fsmName = reader.GetSafeString(128);
         var stateName = reader.GetSafeString(128);
         var position = reader.GetVector2();
+
+        // It may not have appeared here yet, and it does not stay where it was in the room once it did.
+        var name = path.Substring(path.LastIndexOf('/') + 1);
+        var mark = name.LastIndexOf('#');
+        var collected = FindRule(mark > 0 ? name.Substring(0, mark) : name);
+        if (collected is { CollectedByOne: true })
+        {
+            if (collected.To.Contains(stateName)) RemoveCollected(collected, fsmName);
+            return;
+        }
 
         var target = ScenePaths.Find(path);
         if (!target || !target!.activeInHierarchy)
@@ -119,6 +155,56 @@ internal static class TriggerSync
         }
     }
 
+    /// <summary>
+    /// The arena of a dead boss has nothing left to lock anybody in for: whoever was not there for the end would
+    /// be shut in with music and no boss, since only the boss dying in front of them opens it again.
+    /// </summary>
+    public static void ReleaseArena()
+    {
+        foreach (var fsm in Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (fsm.FsmName == ReturnBattleFsm)
+            {
+                fsm.gameObject.SetActive(false);
+                continue;
+            }
+
+            if (fsm.gameObject.activeInHierarchy && OpensGates(fsm.Fsm)) fsm.SendEvent(OpenGatesEvent);
+        }
+
+        Log.Debug("Arena of a dead boss opened");
+    }
+
+    /// <summary>A teammate has it, what it unlocks arrives from them. Ours is gone unless we took it first.</summary>
+    private static void RemoveCollected(Rule rule, string fsmName)
+    {
+        var found = false;
+        foreach (var fsm in Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (fsm.FsmName != fsmName || FindRule(fsm.gameObject.name) != rule) continue;
+
+            // Past waiting means it is holding our hero right now, we were just as fast.
+            var running = fsm.gameObject.activeInHierarchy && fsm.Fsm.ActiveState != null;
+            if (running && !rule.From.Contains(fsm.ActiveStateName)) continue;
+
+            Log.Debug($"Object {fsm.gameObject.name} was collected by a teammate");
+            Object.Destroy(fsm.gameObject);
+            found = true;
+        }
+
+        if (found) ReleaseArena();
+    }
+
+    private static bool OpensGates(Fsm fsm)
+    {
+        foreach (var transition in fsm.GlobalTransitions)
+        {
+            if (transition.EventName == OpenGatesEvent) return true;
+        }
+
+        return false;
+    }
+
     /// <summary>The state that noticed the touch keeps what touched it, later states read where that came from.</summary>
     private static void StoreToucher(FsmState waiting, Vector2 position)
     {
@@ -156,11 +242,12 @@ internal static class TriggerSync
 
     private sealed class Rule
     {
-        public Rule(string[] names, string[] from, string[] to)
+        public Rule(string[] names, string[] from, string[] to, bool collectedByOne = false)
         {
             Names = names;
             From = from;
             To = to;
+            CollectedByOne = collectedByOne;
         }
 
         /// <summary>Parts of the object's name, lower case.</summary>
@@ -171,5 +258,8 @@ internal static class TriggerSync
 
         /// <summary>States that mean it started.</summary>
         public string[] To { get; }
+
+        /// <summary>Whoever starts it gets it, for the others it disappears instead of starting too.</summary>
+        public bool CollectedByOne { get; }
     }
 }

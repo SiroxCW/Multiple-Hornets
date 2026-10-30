@@ -14,7 +14,12 @@ namespace MultipleHornetsMod.Sync.Enemies;
 internal sealed class EntityServer
 {
     private readonly GameServer _server;
+    private const string MemoryScenePrefix = "Memory";
+
     private readonly Dictionary<string, SceneState> _scenes = new();
+
+    /// <summary>The rooms that players in a memory will return to. A boss they killed there is still dead.</summary>
+    private readonly Dictionary<ushort, string> _memoryRooms = new();
 
     internal EntityServer(GameServer server)
     {
@@ -32,13 +37,20 @@ internal sealed class EntityServer
         server.Register(Msg.EntityDied, OnDied);
 
         server.PlayerSceneChanged += OnPlayerSceneChanged;
-        server.PlayerLeft += player => Leave(player, player.Scene);
+        server.PlayerLeft += player =>
+        {
+            Leave(player, player.Scene);
+            ForgetMemoryRoom(player);
+        };
     }
 
     public static void Init() => Session.RegisterServerModule(server => _ = new EntityServer(server));
 
     private void OnPlayerSceneChanged(ServerPlayer player, string oldScene)
     {
+        if (oldScene.StartsWith(MemoryScenePrefix)) ForgetMemoryRoom(player);
+        else if (player.Scene.StartsWith(MemoryScenePrefix) && oldScene.Length > 0) _memoryRooms[player.Id] = oldScene;
+
         Leave(player, oldScene);
         if (player.Scene.Length == 0) return;
 
@@ -48,7 +60,18 @@ internal sealed class EntityServer
             _scenes[player.Scene] = state;
         }
 
+        // Whoever was host may still be in a memory, and somebody who is not here cannot run the room.
+        if (!PlayersIn(player.Scene).Any(p => p.Id == state.Host)) state.Host = player.Id;
+
         SendSceneHost(player.Scene, state, player);
+    }
+
+    private void ForgetMemoryRoom(ServerPlayer player)
+    {
+        if (!_memoryRooms.TryGetValue(player.Id, out var room)) return;
+
+        _memoryRooms.Remove(player.Id);
+        if (!_memoryRooms.ContainsValue(room) && !PlayersIn(room).Any()) _scenes.Remove(room);
     }
 
     private void Leave(ServerPlayer player, string scene)
@@ -58,7 +81,8 @@ internal sealed class EntityServer
         var remaining = PlayersIn(scene).Where(p => p != player).OrderBy(p => p.Id).ToList();
         if (remaining.Count == 0)
         {
-            _scenes.Remove(scene);
+            if (_memoryRooms.ContainsValue(scene)) state.Owners.Clear();
+            else _scenes.Remove(scene);
             return;
         }
 
@@ -100,7 +124,8 @@ internal sealed class EntityServer
 
     /// <summary>
     /// Enemies stay dead for as long as somebody is in the room. Their objects are gone by then, so nobody could
-    /// tell a player who enters the room later. An empty room forgets them, as the game itself does.
+    /// tell a player who enters the room later. An empty room forgets them, as the game itself does, unless somebody
+    /// will return to it from a memory.
     /// </summary>
     private void OnDied(ServerPlayer player, NetPacketReader reader)
     {

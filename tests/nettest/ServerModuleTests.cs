@@ -271,6 +271,31 @@ internal static class ServerModuleTests
         Pump(300);
         check(a.Events.Contains("dead R1 []"), "an empty room forgets its dead enemies");
 
+        // A killer in a memory: the boss stays dead for whoever enters the room meanwhile, and that player runs it.
+        a.EnterScene("B1");
+        Pump(200);
+        a.Send(Msg.EntityDied, Protocol.ChannelEntity, w => { w.Put("B1"); w.Put(88u); });
+        Pump(200);
+        a.EnterScene("Memory_Test");
+        Pump(200);
+        b.Events.Clear();
+        b.EnterScene("B1");
+        Pump(300);
+        check(b.Events.Contains("dead B1 [88]"), "a boss stays dead while its killer is in a memory");
+        check(b.Events.Contains($"host B1 {b.Id} 0"), "the room gets a host who is there while the killer is in a memory");
+        b.EnterScene("R3");
+        Pump(200);
+        a.EnterScene("R3");
+        Pump(200);
+        b.Events.Clear();
+        b.EnterScene("B1");
+        Pump(300);
+        check(b.Events.Contains("dead B1 []"), "the room forgets once the memory has ended and it is empty");
+        b.EnterScene("R3");
+        Pump(200);
+        a.EnterScene("R1");
+        Pump(200);
+
         // Effects
         b.EnterScene("R1");
         Pump(300);

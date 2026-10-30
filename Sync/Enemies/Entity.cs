@@ -435,6 +435,7 @@ internal sealed class Entity
         {
             Health.isDead = true;
             GameObject.SetActive(false);
+            if (IsBossLike) World.TriggerSync.ReleaseArena();
             return;
         }
 
