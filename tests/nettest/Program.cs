@@ -34,7 +34,7 @@ internal sealed class TestClient
             WelcomeName = r.GetString();
             new ServerSettings().Read(r);
             var count = r.GetUShort();
-            for (var i = 0; i < count; i++) { var id = r.GetUShort(); var n = r.GetString(); r.GetString(); Others.Add((id, n)); }
+            for (var i = 0; i < count; i++) { var id = r.GetUShort(); var n = r.GetString(); r.GetString(); r.GetInt(); Others.Add((id, n)); }
             Client.MarkWelcomed(Id);
         });
         Client.Register(Msg.PlayerJoined, r => Log.Add($"joined {r.GetUShort()} {r.GetString()}"));

@@ -20,6 +20,9 @@ internal sealed class PlayerInfo
     public ushort Id { get; }
     public string Name { get; }
     public string Scene { get; set; } = "";
+
+    /// <summary>The color of the player's cloak as 0xRRGGBB, negative for the color of the game.</summary>
+    public int CloakColor { get; set; } = -1;
 }
 
 /// <summary>
@@ -202,7 +205,7 @@ internal static class Session
         var count = reader.GetUShort();
         for (var i = 0; i < count; i++)
         {
-            var player = new PlayerInfo(reader.GetUShort(), reader.GetSafeString()) { Scene = reader.GetSafeString() };
+            var player = new PlayerInfo(reader.GetUShort(), reader.GetSafeString()) { Scene = reader.GetSafeString(), CloakColor = reader.GetInt() };
             PlayerMap[player.Id] = player;
         }
 

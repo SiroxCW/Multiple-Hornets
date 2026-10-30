@@ -7,6 +7,8 @@ see each other, fight the same enemies and bosses, and share all progression.
 
 **Players**
 - See every other player in your room, with Hornet's real animations for every crest, and name tags.
+- Pick your own cloak color from the menu, other players see it too.
+- With the compass equipped, the map shows where everybody else is, in the color of their cloak.
 - Chat and notifications (`Y` by default).
 
 **Shared enemies and bosses**
@@ -81,4 +83,6 @@ wrong in co-op, the files of all players from that session are what is needed to
   stays with one player until that player leaves it.
 - Only needle attacks, damage and the normal heal show their effects on other players. Silk skills, tools and the
   heals of some crests do not yet.
+- The cloak color only applies to Hornet's own sprite, not to separate objects showing her in some cutscenes. Each
+  color uses up to about 64 MB of video memory per sprite sheet.
 - Direct IP connections only for now (no Steam lobbies).

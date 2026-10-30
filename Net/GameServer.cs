@@ -26,6 +26,9 @@ internal sealed class ServerPlayer
     /// <summary>The room the player is currently in, empty while in a menu or loading.</summary>
     public string Scene { get; set; } = "";
 
+    /// <summary>The color of the player's cloak as 0xRRGGBB, negative for the color of the game.</summary>
+    public int CloakColor { get; set; } = -1;
+
     /// <summary>True once the welcome message was sent. Players are only visible to others after that.</summary>
     public bool Welcomed { get; set; }
 
@@ -73,6 +76,7 @@ internal sealed class GameServer
         Register(Msg.PlayerAttack, OnPlayerAttack);
         Register(Msg.PlayerHurt, OnPlayerHurt);
         Register(Msg.PlayerMapPosition, OnPlayerMapPosition);
+        Register(Msg.PlayerCloak, OnPlayerCloak);
         Register(Msg.Chat, OnChat);
     }
 
@@ -308,6 +312,7 @@ internal sealed class GameServer
             writer.Put(other.Id);
             writer.Put(other.Name);
             writer.Put(other.Scene);
+            writer.Put(other.CloakColor);
         }
 
         Send(player, writer, Protocol.ChannelControl, DeliveryMethod.ReliableOrdered);
@@ -399,6 +404,16 @@ internal sealed class GameServer
     /// <summary>The map shows everybody, unlike everything else about a player this is not limited to one room.</summary>
     private void OnPlayerMapPosition(ServerPlayer player, NetPacketReader reader) =>
         Broadcast(BeginRelay(Msg.PlayerMapPosition, player, reader), Protocol.ChannelControl, DeliveryMethod.Sequenced, player);
+
+    private void OnPlayerCloak(ServerPlayer player, NetPacketReader reader)
+    {
+        player.CloakColor = reader.GetInt();
+
+        var writer = Begin(Msg.PlayerCloak);
+        writer.Put(player.Id);
+        writer.Put(player.CloakColor);
+        Broadcast(writer, Protocol.ChannelControl, DeliveryMethod.ReliableOrdered, player);
+    }
 
     private void OnPlayerState(ServerPlayer player, NetPacketReader reader)
     {

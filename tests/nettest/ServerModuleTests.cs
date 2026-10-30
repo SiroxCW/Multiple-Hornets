@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using LiteNetLib;
 using LiteNetLib.Utils;
+using MultipleHornetsMod.Game.Players;
 using MultipleHornetsMod.Net;
 using MultipleHornetsMod.Sync.Enemies;
 using MultipleHornetsMod.Sync.World;
@@ -45,6 +46,7 @@ internal sealed class ModuleClient
             Events.Add($"dead {scene} [{string.Join(",", dead)}]");
         });
         Client.Register(Msg.EntityDied, r => Events.Add($"died {r.GetString()} {r.GetUInt()}"));
+        Client.Register(Msg.PlayerCloak, r => Events.Add($"cloak from {r.GetUShort()} {r.GetInt()}"));
         Client.Register(Msg.PlayerMapPosition, r => Events.Add($"map from {r.GetUShort()}"));
         Client.Register(Msg.WorldTrigger, r => Events.Add($"trigger from {r.GetUShort()} {r.GetString()}"));
         Client.Register(Msg.WorldHit, r => Events.Add($"worldhit from {r.GetUShort()} {r.GetString()}"));
@@ -277,11 +279,32 @@ internal static class ServerModuleTests
         a.Send(Msg.WorldTrigger, Protocol.ChannelEntity, w => w.Put("R1:Wire#0"));
         a.Send(Msg.PlayerAttack, Protocol.ChannelControl, w => w.Put("Attacks/Slash"));
         a.Send(Msg.PlayerMapPosition, Protocol.ChannelControl, w => { w.Put(1f); w.Put(2f); });
+        a.Send(Msg.PlayerCloak, Protocol.ChannelControl, w => w.Put(0x3060E0));
         Pump(200);
         check(b.Events.Contains($"worldhit from {a.Id} R1:Root#0") && !late.Events.Any(e => e.StartsWith("worldhit")), "object hits reach the room only");
         check(b.Events.Contains($"map from {a.Id}") && late.Events.Contains($"map from {a.Id}") && !a.Events.Contains($"map from {a.Id}"), "map positions reach every room");
         check(b.Events.Contains($"trigger from {a.Id} R1:Wire#0") && !late.Events.Any(e => e.StartsWith("trigger")), "started objects reach the room only");
         check(b.Events.Contains($"attack from {a.Id} Attacks/Slash") && !late.Events.Any(e => e.StartsWith("attack")), "attacks reach the room only");
+
+        check(late.Events.Contains($"cloak from {a.Id} {0x3060E0}") && !a.Events.Any(e => e.StartsWith("cloak")), "cloak colors reach everybody else");
+
+        // Cloak pixels: the main red, a dark fold, a white mask, a grey needle, an orange, and invisible red.
+        var pixels = new byte[]
+        {
+            120, 64, 72, 255,
+            30, 16, 18, 255,
+            255, 255, 255, 255,
+            90, 90, 95, 255,
+            200, 120, 20, 255,
+            120, 64, 72, 0,
+        };
+        var original = (byte[])pixels.Clone();
+        CloakPixels.Recolor(pixels, 0x2F5FE0);
+        check(pixels[2] > pixels[0] && pixels[2] >= 200 && pixels[3] == 255, "the cloak takes the new color");
+        check(pixels[6] > pixels[4] && pixels[6] < pixels[2], "dark folds of the cloak stay dark");
+        check(pixels.Skip(8).SequenceEqual(original.Skip(8)), "the mask, needle, other colors and invisible pixels stay");
+        check(CloakPixels.TryParse("#3060e0", out var parsed) && parsed == 0x3060E0 && CloakPixels.Format(parsed) == "3060E0", "cloak colors can be typed");
+        check(!CloakPixels.TryParse("red", out _) && !CloakPixels.TryParse("12345", out _), "other text is no cloak color");
 
         server.Stop();
         try { Directory.Delete(dir, true); } catch { }

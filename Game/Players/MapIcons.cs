@@ -135,6 +135,8 @@ internal static class MapIcons
             Icons[id] = icon;
         }
 
+        if (Session.TryGetPlayer(id, out var owner)) Tint(icon, owner.CloakColor >= 0 ? CloakColors.ToUnityColor(owner.CloakColor) : DefaultTint);
+
         icon.transform.localPosition = new Vector3(position.x, position.y, map.compassIcon.transform.localPosition.z);
         icon.SetActive(visible);
     }
@@ -147,9 +149,13 @@ internal static class MapIcons
         var bob = icon.LocateMyFSM(BobFsm);
         if (bob) Object.Destroy(bob);
 
-        // The same icon as ours would make it impossible to tell which one is us.
-        foreach (var sprite in icon.GetComponentsInChildren<SpriteRenderer>(true)) sprite.color = DefaultTint;
         return icon;
+    }
+
+    /// <summary>The same icon as ours would make it impossible to tell which one is us.</summary>
+    private static void Tint(GameObject icon, Color color)
+    {
+        foreach (var sprite in icon.GetComponentsInChildren<SpriteRenderer>(true)) sprite.color = color;
     }
 
     private static void RemoveAll()

@@ -25,6 +25,7 @@
     <Compile Include="../../Sync/World/WorldServer.cs" />
     <Compile Include="../../Sync/Enemies/EntityServer.cs" />
     <Compile Include="../../Game/Session.cs" />
+    <Compile Include="../../Game/Players/CloakPixels.cs" />
     <Compile Include="../../UI/ChatLog.cs" />
   </ItemGroup>
 </Project>

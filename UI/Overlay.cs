@@ -25,6 +25,20 @@ internal sealed class Overlay : MonoBehaviour
     private static readonly Color PanelColor = new(0.05f, 0.04f, 0.06f, 0.94f);
     private static readonly Color PanelBorder = new(0.55f, 0.32f, 0.32f, 0.9f);
 
+    private static readonly (string Name, int Color)[] CloakPresets =
+    {
+        ("Default", CloakPixels.NoColor),
+        ("Blue", 0x2F5FE0),
+        ("Teal", 0x1FA8A0),
+        ("Green", 0x2FA04A),
+        ("Gold", 0xD8A020),
+        ("Orange", 0xE06A20),
+        ("Purple", 0x7A3FD0),
+        ("Pink", 0xE060A8),
+        ("White", 0xF0F0F0),
+        ("Black", 0x222228),
+    };
+
     private readonly HashSet<KeyCode> _heldKeys = new();
 
     private bool _menuOpen;
@@ -43,6 +57,7 @@ internal sealed class Overlay : MonoBehaviour
     private string _hostAddress = "";
     private string _hostPort = "";
     private string _hostPassword = "";
+    private string _cloakColor = "";
 
     private Styles? _styles;
 
@@ -53,6 +68,7 @@ internal sealed class Overlay : MonoBehaviour
         _port = ModConfig.JoinPort.ToString();
         _hostAddress = ModConfig.HostAddress;
         _hostPort = ModConfig.HostPort.ToString();
+        _cloakColor = CloakPixels.Format(CloakColors.Local);
     }
 
     private void Update()
@@ -269,12 +285,43 @@ internal sealed class Overlay : MonoBehaviour
         GUILayout.Space(10f);
         GUILayout.Label("Display", styles.Header);
         ModConfig.ShowNames = GUILayout.Toggle(ModConfig.ShowNames, " Show player names", styles.Toggle);
+        DrawCloakSection(styles);
 
         GUILayout.Space(10f);
         GUILayout.Label($"{ModConfig.MenuKey}: close menu   {ModConfig.ChatKey}: chat", styles.Hint);
 
         GUILayout.EndScrollView();
         GUILayout.EndArea();
+    }
+
+    private void DrawCloakSection(Styles styles)
+    {
+        GUILayout.Space(10f);
+        GUILayout.Label("Cloak color", styles.Header);
+
+        for (var i = 0; i < CloakPresets.Length; i += 5)
+        {
+            GUILayout.BeginHorizontal();
+            for (var j = i; j < i + 5 && j < CloakPresets.Length; j++)
+            {
+                if (!GUILayout.Button(CloakPresets[j].Name, styles.Button)) continue;
+
+                CloakColors.SetLocal(CloakPresets[j].Color);
+                _cloakColor = CloakPixels.Format(CloakColors.Local);
+            }
+
+            GUILayout.EndHorizontal();
+        }
+
+        var text = _cloakColor;
+        Field("Hex color", ref _cloakColor, 7, styles);
+        if (_cloakColor != text)
+        {
+            if (_cloakColor.Trim().Length == 0) CloakColors.SetLocal(CloakPixels.NoColor);
+            else if (CloakPixels.TryParse(_cloakColor, out var color)) CloakColors.SetLocal(color);
+        }
+
+        GUILayout.Label("For example 3060E0. Your color is shown to everyone. It takes a moment to appear.", styles.Hint);
     }
 
     private void DrawConnectSection(Styles styles)

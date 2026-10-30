@@ -71,6 +71,7 @@ internal sealed class RemoteHornet : MonoBehaviour
         remote._renderer = renderer;
         remote._sprite = sprite;
         remote._baseLibrary = heroAnimator.Library;
+        go.AddComponent<CloakPainter>().PlayerId = player.Id;
         renderer.enabled = false;
         return remote;
     }

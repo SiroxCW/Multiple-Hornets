@@ -24,6 +24,7 @@ public partial class MultipleHornetsModPlugin : BaseUnityPlugin
         AttackEffects.Init();
         HeroEffects.Init();
         MapIcons.Init();
+        CloakColors.Init();
         WorldServer.Init();
         WorldSync.Init();
         HitSync.Init();
@@ -55,6 +56,7 @@ internal sealed class Runner : MonoBehaviour
             Session.Update();
             PlayerSync.Update();
             MapIcons.Update();
+            CloakColors.Update();
             WorldSync.Update();
             WorldServer.Current?.Update();
             EnemySync.Update();

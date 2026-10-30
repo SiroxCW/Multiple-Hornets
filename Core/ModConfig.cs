@@ -18,6 +18,7 @@ internal static class ModConfig
     private static ConfigEntry<KeyCode> _menuKey = null!;
     private static ConfigEntry<KeyCode> _chatKey = null!;
     private static ConfigEntry<bool> _showNames = null!;
+    private static ConfigEntry<string> _cloakColor = null!;
     private static ConfigEntry<bool> _debugLogging = null!;
 
     public static void Init(ConfigFile config)
@@ -26,6 +27,7 @@ internal static class ModConfig
         _menuKey = config.Bind("Keys", "MultiplayerMenu", KeyCode.F5, "Opens the Multiple Hornets menu.");
         _chatKey = config.Bind("Keys", "Chat", KeyCode.Y, "Opens the chat input while connected.");
         _showNames = config.Bind("Display", "ShowNames", true, "Show names above other players.");
+        _cloakColor = config.Bind("Display", "CloakColor", "", "Color of your cloak as RRGGBB, for example 3060E0. Empty keeps the color of the game.");
 
         _joinAddress = config.Bind("Connection", "LastAddress", "127.0.0.1", "Last address used to join a game.");
         _joinPort = config.Bind("Connection", "LastPort", Protocol.DefaultPort, "Last port used to join a game.");
@@ -72,6 +74,12 @@ internal static class ModConfig
 
     public static KeyCode MenuKey => _menuKey.Value;
     public static KeyCode ChatKey => _chatKey.Value;
+
+    public static string CloakColor
+    {
+        get => _cloakColor.Value;
+        set => _cloakColor.Value = value;
+    }
 
     public static bool ShowNames
     {

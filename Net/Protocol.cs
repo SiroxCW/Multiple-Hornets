@@ -50,6 +50,7 @@ internal enum Msg : byte
     PlayerAttack = 14,
     PlayerHurt = 15,
     PlayerMapPosition = 16,
+    PlayerCloak = 17,
 
     // Progression sync
     WorldChanges = 30,
