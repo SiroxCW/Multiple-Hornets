@@ -477,7 +477,13 @@ internal static class WorldSync
             Session.Client?.Send(writer, Protocol.ChannelWorld, DeliveryMethod.ReliableOrdered);
         }
 
-        foreach (var entry in outgoing) Log.Debug($"World -> {entry.Key} = {entry.Value} {entry.Extra}");
+        // The server does not send our own changes back, and the next loaded save has to find them here too.
+        // Otherwise an upgrade of ours looks new after reloading and everybody gets a second one.
+        foreach (var entry in outgoing)
+        {
+            Remember(entry);
+            Log.Debug($"World -> {entry.Key} = {entry.Value} {entry.Extra}");
+        }
 
         Reporter.ClearOutgoing();
     }
