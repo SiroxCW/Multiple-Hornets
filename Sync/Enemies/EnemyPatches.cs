@@ -50,6 +50,18 @@ internal static class FsmDoTransitionPatch
     }
 }
 
+[HarmonyPatch(typeof(FsmState), "ActivateActions")]
+internal static class FsmActivateActionsPatch
+{
+    private static bool Prefix(FsmState __instance, int startIndex, ref bool __result)
+    {
+        if (!EnemySync.IsPuppetFsm(__instance.Fsm)) return true;
+
+        __result = EnemySync.ActivatePuppetActions(__instance, startIndex);
+        return false;
+    }
+}
+
 [HarmonyPatch(typeof(Fsm), nameof(Fsm.SetState))]
 internal static class FsmSetStatePatch
 {

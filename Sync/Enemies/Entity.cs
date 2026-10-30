@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using HutongGames.PlayMaker;
 using LiteNetLib.Utils;
+using MultipleHornetsMod.Core;
 using MultipleHornetsMod.Game.Players;
 using UnityEngine;
 
@@ -78,24 +80,32 @@ internal struct EntitySnapshot
 /// </summary>
 internal sealed class Entity
 {
+    private const int MaxDeathAttempts = 3;
+    private const float DeathCleanupTime = 2f;
+    private const float DeathCleanupTimeNoEffects = 15f;
+
     private readonly SnapshotInterpolator _interpolator = new();
     private RigidbodyType2D _storedBodyType;
     private bool _bodyStored;
     private bool _hasRemoteTransform;
     private float _remoteScaleX = 1f;
     private float _remoteRotation;
+    private float _deathAppliedAt = -1f;
+    private int _deathAttempts;
 
     private Entity(uint id, HealthManager health)
     {
         Id = id;
         Health = health;
         GameObject = health.gameObject;
+        Name = GameObject.name;
         Transform = health.transform;
         Body = health.GetComponent<Rigidbody2D>();
         Animator = health.GetComponent<tk2dSpriteAnimator>();
     }
 
     public uint Id { get; }
+    public string Name { get; }
     public HealthManager Health { get; }
     public GameObject GameObject { get; }
     public Transform Transform { get; }
@@ -110,7 +120,8 @@ internal sealed class Entity
     /// <summary>The owner reported this enemy dead while it could not die here yet (e.g. it was inactive).</summary>
     public bool PendingDeath { get; set; }
 
-    public bool PendingDeathQuiet { get; set; }
+    /// <summary>The enemy was dead before we got here and is kept out of the room.</summary>
+    public bool RemovedDead { get; private set; }
 
     /// <summary>Last time the local hero hit this enemy or was hit by it.</summary>
     public float LastLocalEngage { get; set; } = -100f;
@@ -143,7 +154,7 @@ internal sealed class Entity
         }
 
         var lowerPath = path.ToLowerInvariant();
-        entity.IsBossLike = health.hp >= 200 || health.bigEnemyDeath || lowerPath.Contains("boss");
+        entity.IsBossLike = health.hp >= 100 || health.bigEnemyDeath || lowerPath.Contains("boss");
         entity.LastRemoteUpdate = Time.realtimeSinceStartup;
         return entity;
     }
@@ -251,32 +262,105 @@ internal sealed class Entity
         if (!Health.isDead) Health.hp = hp;
     }
 
-    /// <summary>
-    /// Performs a death the owner reported. A quiet death (for enemies that were already dead when we entered
-    /// the room) drops nothing.
-    /// </summary>
-    public void ApplyDeath(float? direction, AttackTypes attackType, bool quiet)
+    public string DescribeState(int fsmIndex, int stateIndex)
+    {
+        if (fsmIndex < 0 || fsmIndex >= Fsms.Count) return $"unknown FSM {fsmIndex}";
+
+        var fsm = Fsms[fsmIndex].Fsm;
+        var states = fsm.States;
+        return states != null && stateIndex >= 0 && stateIndex < states.Length
+            ? $"{fsm.Name}/{states[stateIndex].Name} (was {fsm.ActiveStateName})"
+            : $"{fsm.Name}/unknown state {stateIndex}";
+    }
+
+    /// <summary>Performs a death the owner reported.</summary>
+    public void ApplyDeath(float? direction, AttackTypes attackType)
     {
         if (Health.isDead) return;
 
         if (!GameObject.activeInHierarchy)
         {
             PendingDeath = true;
-            PendingDeathQuiet = quiet;
             return;
         }
 
         PendingDeath = false;
+        _deathAttempts++;
+        Log.Debug($"Puppet {Name} dies, attempt {_deathAttempts}");
+
         EnemySync.AuthorizedDeath = true;
         try
         {
             Health.Die(direction, attackType, NailElements.None, null, ignoreEvasion: true, corpseFlingMultiplier: 1f,
-                overrideSpecialDeath: false, disallowDropFling: quiet);
+                overrideSpecialDeath: false, disallowDropFling: false);
+        }
+        catch (Exception e)
+        {
+            Log.Exception($"Death of {Name}", e);
         }
         finally
         {
             EnemySync.AuthorizedDeath = false;
         }
+
+        _deathAppliedAt = Time.realtimeSinceStartup;
+        Log.Debug($"Puppet {Name} after death: dead={Health.isDead} active={GameObject.activeInHierarchy}");
+        if (Health.isDead || Health.hasSpecialDeath) return;
+
+        // Some enemies refuse to die while the local hero is dead; the owner already decided, so try again.
+        if (_deathAttempts < MaxDeathAttempts || (HeroController.SilentInstance is { } hero && hero.cState.dead)) PendingDeath = true;
+    }
+
+    /// <summary>
+    /// Removes an enemy that died before we got here. Nothing drops. Outside of arenas nothing is shown either, but
+    /// an arena has to count the enemy and only dying does that, which leaves a corpse.
+    /// </summary>
+    public void RemoveDead()
+    {
+        if (RemovedDead || Health.isDead) return;
+
+        RemovedDead = true;
+        PendingDeath = false;
+        Log.Debug($"Enemy {Name} is already dead, removing it");
+
+        if (!Health.battleScene)
+        {
+            Health.isDead = true;
+            GameObject.SetActive(false);
+            return;
+        }
+
+        EnemySync.AuthorizedDeath = true;
+        try
+        {
+            Health.Die(null, AttackTypes.Generic, NailElements.None, null, ignoreEvasion: true, corpseFlingMultiplier: 1f,
+                overrideSpecialDeath: true, disallowDropFling: true);
+        }
+        catch (Exception e)
+        {
+            Log.Exception($"Removal of {Name}", e);
+        }
+        finally
+        {
+            EnemySync.AuthorizedDeath = false;
+        }
+
+        _deathAppliedAt = Time.realtimeSinceStartup;
+    }
+
+    /// <summary>
+    /// A dead enemy normally disappears by itself. If that failed, it would stay in the room as a frozen statue that
+    /// cannot be hit anymore.
+    /// </summary>
+    private void CheckDeathFinished()
+    {
+        if (_deathAppliedAt < 0f || !GameObject.activeSelf) return;
+
+        var limit = GameObject.GetComponent<EnemyDeathEffects>() ? DeathCleanupTime : DeathCleanupTimeNoEffects;
+        if (Time.realtimeSinceStartup - _deathAppliedAt < limit) return;
+
+        Log.Warn($"Dead enemy {Name} was still in the room, removing it.");
+        GameObject.SetActive(false);
     }
 
     public void ApplySnapshot(EntitySnapshot snapshot)
@@ -285,7 +369,7 @@ internal sealed class Entity
 
         if (snapshot.Dead)
         {
-            ApplyDeath(null, AttackTypes.Generic, quiet: true);
+            RemoveDead();
             return;
         }
 
@@ -323,9 +407,26 @@ internal sealed class Entity
     /// <summary>Puppet work that has to happen every frame before rendering.</summary>
     public void PuppetUpdate()
     {
+        if (RemovedDead && !Health.battleScene && GameObject.activeSelf) GameObject.SetActive(false);
+
+        if (Health.isDead)
+        {
+            CheckDeathFinished();
+            return;
+        }
+
         if (PendingDeath && GameObject.activeInHierarchy)
         {
-            ApplyDeath(null, AttackTypes.Generic, PendingDeathQuiet);
+            ApplyDeath(null, AttackTypes.Generic);
+            return;
+        }
+
+        // It cannot be made to die, so at least it does not stay behind.
+        if (_deathAttempts >= MaxDeathAttempts && !PendingDeath && !Health.hasSpecialDeath)
+        {
+            Log.Warn($"Enemy {Name} refused to die, removing it.");
+            Health.isDead = true;
+            GameObject.SetActive(false);
             return;
         }
 

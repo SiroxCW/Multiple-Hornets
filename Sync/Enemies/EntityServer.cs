@@ -27,6 +27,7 @@ internal sealed class EntityServer
         server.Register(Msg.EntityClaim, OnClaim);
         server.Register(Msg.EntitySnapshot, OnSnapshot);
         server.Register(Msg.EntitySnapshotRequest, OnSnapshotRequest);
+        server.Register(Msg.EntityDied, OnDied);
 
         server.PlayerSceneChanged += OnPlayerSceneChanged;
         server.PlayerLeft += player => Leave(player, player.Scene);
@@ -89,6 +90,28 @@ internal sealed class EntityServer
             writer.Put(pair.Value);
         }
 
+        writer.Put((ushort)state.Dead.Count);
+        foreach (var id in state.Dead) writer.Put(id);
+
+        _server.Send(target, writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>
+    /// Enemies stay dead for as long as somebody is in the room. Their objects are gone by then, so nobody could
+    /// tell a player who enters the room later. An empty room forgets them, as the game itself does.
+    /// </summary>
+    private void OnDied(ServerPlayer player, NetPacketReader reader)
+    {
+        var scene = reader.GetSafeString(128);
+        var id = reader.GetUInt();
+        if (scene == player.Scene && _scenes.TryGetValue(scene, out var state)) state.Dead.Add(id);
+    }
+
+    private void SendDied(ServerPlayer target, string scene, uint id)
+    {
+        var writer = GameServer.Begin(Msg.EntityDied);
+        writer.Put(scene);
+        writer.Put(id);
         _server.Send(target, writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
     }
 
@@ -142,6 +165,12 @@ internal sealed class EntityServer
         var id = reader.GetUInt();
         if (scene != player.Scene || !_scenes.TryGetValue(scene, out var state)) return;
 
+        if (state.Dead.Contains(id))
+        {
+            SendDied(player, scene, id);
+            return;
+        }
+
         var owner = state.OwnerOf(id);
         if (owner == player.Id || !_server.TryGetPlayer(owner, out var target)) return;
 
@@ -157,6 +186,12 @@ internal sealed class EntityServer
         var scene = reader.GetSafeString(128);
         var id = reader.GetUInt();
         if (scene != player.Scene || !_scenes.TryGetValue(scene, out var state)) return;
+
+        if (state.Dead.Contains(id))
+        {
+            SendDied(player, scene, id);
+            return;
+        }
 
         var owner = state.OwnerOf(id);
         if (owner == player.Id || !_server.TryGetPlayer(owner, out var target)) return;
@@ -187,6 +222,8 @@ internal sealed class EntityServer
 
         /// <summary>Enemies that were handed away from the host.</summary>
         public Dictionary<uint, ushort> Owners { get; } = new();
+
+        public HashSet<uint> Dead { get; } = new();
 
         public ushort OwnerOf(uint id) => Owners.TryGetValue(id, out var owner) ? owner : Host;
     }

@@ -239,9 +239,13 @@ internal sealed class SceneDomain : IWorldDomain
     /// </summary>
     private static void RefreshLive(PersistentBoolItem item)
     {
-        // A running arena is driven by the synced enemies, reloading it mid fight would break it.
+        // Reloading a running arena would break it, and the player who won it may have left already.
         var battle = item.GetComponent<BattleScene>();
-        if (battle && battle!.started) return;
+        if (battle && battle!.started)
+        {
+            battle.DoEndBattle();
+            return;
+        }
 
         item.PreSetup();
 

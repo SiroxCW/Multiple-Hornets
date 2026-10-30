@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using HarmonyLib;
 using HutongGames.PlayMaker;
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -47,12 +48,19 @@ internal static class EnemySync
     private static readonly Dictionary<Fsm, FsmBinding> FsmBindings = new();
     private static readonly Dictionary<HealthManager, Entity> ByHealth = new();
     private static readonly Dictionary<tk2dSpriteAnimator, Entity> ByAnimator = new();
+    private static readonly HashSet<uint> DeadIds = new();
     private static readonly HashSet<HealthManager> Ignored = new();
     private static readonly Dictionary<uint, ushort> OwnerOverrides = new();
     private static readonly Dictionary<uint, EntitySnapshot> PendingSnapshots = new();
     private static readonly Dictionary<uint, (float? Direction, AttackTypes Type)> PendingDeaths = new();
     private static readonly List<HealthManager> ScanBuffer = new();
     private static readonly NetDataWriter EventBody = new();
+
+    private static readonly AccessTools.FieldRef<FsmState, int> ActiveActionIndexRef =
+        AccessTools.FieldRefAccess<FsmState, int>("activeActionIndex");
+
+    private static readonly AccessTools.FieldRef<FsmState, FsmStateAction> ActiveActionRef =
+        AccessTools.FieldRefAccess<FsmState, FsmStateAction>("activeAction");
 
     private static string _scene = "";
     private static ushort _host;
@@ -82,6 +90,7 @@ internal static class EnemySync
         Session.RegisterHandler(Msg.EntityClaim, OnEntityClaim);
         Session.RegisterHandler(Msg.EntitySnapshot, OnEntitySnapshot);
         Session.RegisterHandler(Msg.EntitySnapshotRequest, OnEntitySnapshotRequest);
+        Session.RegisterHandler(Msg.EntityDied, OnEntityDied);
 
         Session.Disconnected += () => SwitchScene("");
         Session.PlayerSceneChanged += OnPlayerSceneChanged;
@@ -154,6 +163,49 @@ internal static class EnemySync
 
     // ---- Hooks, called from patches ---------------------------------------------------------------------------
 
+    /// <summary>
+    /// Enters the actions of a puppet's state one by one. The FSM was not in every state the owner passed through,
+    /// so a variable an action needs can be missing. Such an action is skipped; without this it would take all
+    /// actions after it with it, which is how an enemy ends up without its animation.
+    /// </summary>
+    public static bool ActivatePuppetActions(FsmState state, int startIndex)
+    {
+        var actions = state.Actions;
+        for (var i = startIndex; i < actions.Length; i++)
+        {
+            ActiveActionIndexRef(state) = i;
+
+            var action = actions[i];
+            if (!action.Enabled)
+            {
+                action.Finished = true;
+                continue;
+            }
+
+            ActiveActionRef(state) = action;
+            action.Active = true;
+            action.Finished = false;
+            action.Init(state);
+            action.Entered = true;
+
+            try
+            {
+                action.OnEnter();
+            }
+            catch (Exception e)
+            {
+                action.Finished = true;
+                Log.Exception($"Puppet action {action.GetType().Name} in {state.Name}", e);
+            }
+
+            if (!action.Finished) state.ActiveActions.Add(action);
+            if (state.Fsm.IsSwitchingState) return false;
+            if (!action.Finished && state.IsSequence) return false;
+        }
+
+        return true;
+    }
+
     public static bool IsPuppetFsm(Fsm fsm) =>
         FsmBindings.Count > 0 && FsmBindings.TryGetValue(fsm, out var binding) && binding.Entity.IsPuppet;
 
@@ -189,6 +241,7 @@ internal static class EnemySync
         var index = binding.IndexOf(state);
         if (index < 0) return;
 
+        Log.Debug($"Enemy {binding.Entity.Name} -> {fsm.Name}/{state.Name} (hp {binding.Entity.Health.hp})");
         var body = BeginEvent(EventState, binding.Entity);
         body.Put((byte)binding.Index);
         body.Put((ushort)index);
@@ -234,6 +287,18 @@ internal static class EnemySync
 
     public static void OnOwnedDied(Entity entity, float? direction, AttackTypes attackType)
     {
+        Log.Debug($"Enemy {entity.Name} died, audience={_audience}");
+
+        // Enemies that come back on their own are not dead for somebody who enters the room later.
+        if (!entity.Health.deathReset)
+        {
+            DeadIds.Add(entity.Id);
+            var writer = GameClient.Begin(Msg.EntityDied);
+            writer.Put(_scene);
+            writer.Put(entity.Id);
+            Session.Client?.Send(writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
+        }
+
         if (!_audience) return;
 
         var body = BeginEvent(EventDeath, entity);
@@ -283,6 +348,7 @@ internal static class EnemySync
         OwnerOverrides.Clear();
         PendingSnapshots.Clear();
         PendingDeaths.Clear();
+        DeadIds.Clear();
         EventBody.Reset();
         _eventCount = 0;
         if (scene.Length == 0) return;
@@ -330,6 +396,10 @@ internal static class EnemySync
 
         var overrides = new Dictionary<uint, ushort>(count);
         for (var i = 0; i < count; i++) overrides[reader.GetUInt()] = reader.GetUShort();
+
+        var deadCount = reader.GetUShort();
+        var dead = new uint[deadCount];
+        for (var i = 0; i < deadCount; i++) dead[i] = reader.GetUInt();
         if (scene != _scene) return;
 
         _host = host;
@@ -337,7 +407,22 @@ internal static class EnemySync
         foreach (var pair in overrides) OwnerOverrides[pair.Key] = pair.Value;
 
         foreach (var entity in Entities.Values) UpdateMode(entity);
-        Log.Debug($"Room {scene} host is {host}, {count} enemies handed over.");
+        foreach (var id in dead) MarkDead(id);
+        Log.Debug($"Room {scene} host is {host}, {count} enemies handed over, {deadCount} dead.");
+    }
+
+    private static void OnEntityDied(NetDataReader reader)
+    {
+        var scene = reader.GetSafeString(128);
+        var id = reader.GetUInt();
+        if (scene == _scene) MarkDead(id);
+    }
+
+    /// <summary>The enemy died before we got here, or we missed it. Our copy of it was never told.</summary>
+    private static void MarkDead(uint id)
+    {
+        DeadIds.Add(id);
+        if (Entities.TryGetValue(id, out var entity) && entity.IsValid) entity.RemoveDead();
     }
 
     private static void OnEntityOwner(NetDataReader reader)
@@ -350,6 +435,7 @@ internal static class EnemySync
         if (owner == _host) OwnerOverrides.Remove(id);
         else OwnerOverrides[id] = owner;
 
+        Log.Debug($"Enemy {id:X8} now belongs to {owner}");
         if (Entities.TryGetValue(id, out var entity)) UpdateMode(entity);
     }
 
@@ -431,10 +517,17 @@ internal static class EnemySync
 
         if (!IsLocalOwner(id)) entity.SetPuppet(true);
 
+        if (DeadIds.Contains(id))
+        {
+            Log.Debug($"Registered enemy {path} as {id:X8}, it is already dead");
+            entity.RemoveDead();
+            return;
+        }
+
         if (PendingDeaths.TryGetValue(id, out var death))
         {
             PendingDeaths.Remove(id);
-            if (entity.IsPuppet) entity.ApplyDeath(death.Direction, death.Type, quiet: false);
+            if (entity.IsPuppet) entity.ApplyDeath(death.Direction, death.Type);
         }
 
         if (PendingSnapshots.TryGetValue(id, out var snapshot))
@@ -716,6 +809,7 @@ internal static class EnemySync
             return;
         }
 
+        Log.Debug($"Hit on {entity.Name} by {attacker} for {damage}, hp {entity.Health.hp}");
         RemoteHit.Apply(entity, damage, attackType, direction, magnitude, stun, flags, element, attackerPosition);
         entity.ForceHpSend = true;
         entity.LastRemoteHitter = attacker;
@@ -781,6 +875,7 @@ internal static class EnemySync
                 {
                     var fsm = reader.GetByte();
                     var state = reader.GetUShort();
+                    if (entity != null) Log.Debug($"Puppet {entity.Name} <- {entity.DescribeState(fsm, state)} (hp {entity.Health.hp})");
                     entity?.ForceState(fsm, state, reenter: true);
                     break;
                 }
@@ -801,7 +896,8 @@ internal static class EnemySync
                     var direction = reader.GetFloat();
                     var type = (AttackTypes)reader.GetByte();
                     float? dir = float.IsNaN(direction) ? null : direction;
-                    if (entity != null) entity.ApplyDeath(dir, type, quiet: false);
+                    Log.Debug($"Death of enemy {id:X8} from {sender}, here {(entity == null ? "not a puppet of them" : "puppet " + entity.Name)}");
+                    if (entity != null) entity.ApplyDeath(dir, type);
                     else if (relevant && !Entities.ContainsKey(id)) PendingDeaths[id] = (dir, type);
                     break;
                 }
