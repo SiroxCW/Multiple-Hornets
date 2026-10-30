@@ -49,6 +49,7 @@ internal enum Msg : byte
     Chat = 13,
     PlayerAttack = 14,
     PlayerHurt = 15,
+    PlayerMapPosition = 16,
 
     // Progression sync
     WorldChanges = 30,

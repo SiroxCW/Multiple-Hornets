@@ -72,6 +72,7 @@ internal sealed class GameServer
         Register(Msg.PlayerAnim, OnPlayerAnim);
         Register(Msg.PlayerAttack, OnPlayerAttack);
         Register(Msg.PlayerHurt, OnPlayerHurt);
+        Register(Msg.PlayerMapPosition, OnPlayerMapPosition);
         Register(Msg.Chat, OnChat);
     }
 
@@ -394,6 +395,10 @@ internal sealed class GameServer
 
         PlayerSceneChanged?.Invoke(player, oldScene);
     }
+
+    /// <summary>The map shows everybody, unlike everything else about a player this is not limited to one room.</summary>
+    private void OnPlayerMapPosition(ServerPlayer player, NetPacketReader reader) =>
+        Broadcast(BeginRelay(Msg.PlayerMapPosition, player, reader), Protocol.ChannelControl, DeliveryMethod.Sequenced, player);
 
     private void OnPlayerState(ServerPlayer player, NetPacketReader reader)
     {
