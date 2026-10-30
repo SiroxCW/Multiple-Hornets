@@ -28,6 +28,9 @@ internal static class EnemySync
     private const float OwnerChangeCooldown = 2f;
     private const float KeepRange = 14f;
     private const float ClaimRange = 10f;
+    private const float CloserPlayerMargin = 2f;
+    private const float CloserPlayerCooldown = 4f;
+    private const float HitterBonus = 3f;
     private const float BossKeepRange = 40f;
     private const float BossClaimRange = 25f;
     private const float StaleTime = 4f;
@@ -698,8 +701,8 @@ internal static class EnemySync
     }
 
     /// <summary>
-    /// Enemies follow the hero of their owner. When we are far away from an enemy and do not fight it, but a
-    /// teammate is close to it, the enemy is handed to them so it fights them.
+    /// Enemies only see the hero of their owner. When we do not fight an enemy, it goes to a teammate who is clearly
+    /// closer or attacks it, so it fights them. Bosses have the whole arena to cover and only move when we are gone.
     /// </summary>
     private static void CheckHandoffs()
     {
@@ -717,9 +720,18 @@ internal static class EnemySync
             var keepRange = entity.IsBossLike ? BossKeepRange : KeepRange;
             var claimRange = entity.IsBossLike ? BossClaimRange : ClaimRange;
             var ownDistance = entity.GameObject.activeInHierarchy ? entity.DistanceTo(heroPosition) : float.MaxValue;
-            if (ownDistance <= keepRange) continue;
 
-            var candidate = FindClosestPlayer(entity, claimRange, now);
+            ushort candidate;
+            if (ownDistance > keepRange)
+            {
+                candidate = FindClosestPlayer(entity, claimRange, now);
+            }
+            else
+            {
+                if (entity.IsBossLike || now - entity.LastOwnerChange < CloserPlayerCooldown) continue;
+                candidate = FindCloserPlayer(entity, ownDistance, now);
+            }
+
             if (candidate == 0) continue;
 
             entity.LastOwnerChange = now;
@@ -745,6 +757,29 @@ internal static class EnemySync
             if (score < bestScore)
             {
                 bestScore = score;
+                best = remote.PlayerId;
+            }
+        }
+
+        return best;
+    }
+
+    private static ushort FindCloserPlayer(Entity entity, float ownDistance, float now)
+    {
+        ushort best = 0;
+        var bestDistance = ownDistance - CloserPlayerMargin;
+        foreach (var remote in PlayerSync.RemotePlayers)
+        {
+            if (!remote || !remote.HasPosition) continue;
+
+            var distance = entity.DistanceTo(remote.transform.position);
+            if (distance > ClaimRange) continue;
+
+            if (remote.PlayerId == entity.LastRemoteHitter && now - entity.LastRemoteHitTime < EngageTimeout) distance -= HitterBonus;
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
                 best = remote.PlayerId;
             }
         }

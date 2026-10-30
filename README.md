@@ -77,7 +77,8 @@ wrong in co-op, the files of all players from that session are what is needed to
 ## Known limitations
 
 - Enemies created at runtime (for example some summons) are not shared: each player fights their own copy.
-- Enemies always target the player who currently owns them.
+- Enemies target the player who currently owns them. Normal enemies go to whoever is closer or attacks them, a boss
+  stays with one player until that player leaves it.
 - Only needle attacks, damage and the normal heal show their effects on other players. Silk skills, tools and the
   heals of some crests do not yet.
 - Direct IP connections only for now (no Steam lobbies).
