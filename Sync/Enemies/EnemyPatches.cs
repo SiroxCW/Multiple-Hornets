@@ -15,6 +15,7 @@ internal static class FsmEnterStatePatch
     {
         try
         {
+            if (Game.Session.IsConnected) Watchdog.MarkFsm(__instance, state);
             EnemySync.OnFsmEnterState(__instance, state);
         }
         catch (Exception e)

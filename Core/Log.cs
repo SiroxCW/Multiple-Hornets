@@ -25,7 +25,9 @@ internal static class Log
 
     public static void Debug(string message)
     {
+        // The session log always gets the details, the BepInEx log only when asked for.
         if (ModConfig.DebugLogging) _source?.LogInfo("[Debug] " + message);
+        else SessionLog.Write("[Debug] " + message);
     }
 
     /// <summary>

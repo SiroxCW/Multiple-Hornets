@@ -438,6 +438,9 @@ internal static class WorldSync
 
     private static string? ApplyEntry(WorldEntry entry)
     {
+        // A whole catch-up would drown the log, the sum of it is reported anyway.
+        if (!IsCatchingUp) Log.Debug($"World <- {entry.Key} = {entry.Value} {entry.Extra}");
+
         foreach (var domain in Domains)
         {
             if (!domain.Handles(entry.Key)) continue;
@@ -474,10 +477,7 @@ internal static class WorldSync
             Session.Client?.Send(writer, Protocol.ChannelWorld, DeliveryMethod.ReliableOrdered);
         }
 
-        if (ModConfig.DebugLogging)
-        {
-            foreach (var entry in outgoing) Log.Debug($"World -> {entry.Key} = {entry.Value} {entry.Extra}");
-        }
+        foreach (var entry in outgoing) Log.Debug($"World -> {entry.Key} = {entry.Value} {entry.Extra}");
 
         Reporter.ClearOutgoing();
     }

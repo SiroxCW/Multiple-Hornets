@@ -16,6 +16,8 @@ public partial class MultipleHornetsModPlugin : BaseUnityPlugin
     private void Awake()
     {
         Log.Init(Logger);
+        SessionLog.Init();
+        Watchdog.Start();
         ModConfig.Init(Config);
 
         PlayerSync.Init();
@@ -32,7 +34,7 @@ public partial class MultipleHornetsModPlugin : BaseUnityPlugin
         runner.AddComponent<Runner>();
         runner.AddComponent<Overlay>();
 
-        Logger.LogInfo($"Multiple Hornets {Version} loaded.");
+        Logger.LogInfo($"Multiple Hornets {Version} loaded. Detailed log: {SessionLog.FilePath}");
     }
 }
 
@@ -43,6 +45,7 @@ internal sealed class Runner : MonoBehaviour
     {
         try
         {
+            Diagnostics.Update();
             GameState.Refresh();
             Session.Update();
             PlayerSync.Update();

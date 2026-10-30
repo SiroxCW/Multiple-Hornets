@@ -22,7 +22,7 @@ namespace MultipleHornetsMod.Sync.World;
 internal sealed class WorldServer
 {
     private const int BatchSize = 150;
-    private const long SaveDelayMs = 3000;
+    private const long SaveDelayMs = 1000;
 
     private static readonly Stopwatch Clock = Stopwatch.StartNew();
 
@@ -102,6 +102,7 @@ internal sealed class WorldServer
             File.WriteAllText(temp, builder.ToString());
             if (File.Exists(_filePath)) File.Delete(_filePath);
             File.Move(temp, _filePath);
+            Log.Debug($"Shared playthrough saved, {_state.Count} entries.");
         }
         catch (Exception e)
         {
@@ -156,7 +157,11 @@ internal sealed class WorldServer
     {
         // Changes sent just before the host switched saves belong to the previous playthrough.
         var playthrough = reader.GetSafeString(64);
-        if (Playthrough.Length == 0 || playthrough != Playthrough) return;
+        if (Playthrough.Length == 0 || playthrough != Playthrough)
+        {
+            Log.Warn($"Dropped progression of {player.Name}, it belongs to playthrough '{playthrough}' instead of '{Playthrough}'.");
+            return;
+        }
 
         var count = reader.GetUShort();
         var accepted = new List<WorldEntry>(count);

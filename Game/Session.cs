@@ -237,6 +237,7 @@ internal static class Session
 
         var oldScene = player.Scene;
         player.Scene = scene;
+        Log.Debug($"Player {player.Name} moved from {oldScene} to {player.Scene}");
         PlayerSceneChanged?.Invoke(player, oldScene);
     }
 
