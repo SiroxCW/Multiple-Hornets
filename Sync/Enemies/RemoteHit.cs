@@ -1,4 +1,7 @@
+using System;
+using MultipleHornetsMod.Core;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace MultipleHornetsMod.Sync.Enemies;
 
@@ -52,6 +55,47 @@ internal static class RemoteHit
                 // Level 0 makes the scaling multiplier 1, the attacker's game already scaled the damage.
                 DamageScalingLevel = 0,
             });
+        }
+        finally
+        {
+            Active = false;
+        }
+    }
+
+    /// <summary>Replays a teammate's hit on an object that is not an enemy.</summary>
+    public static void ApplyToObject(GameObject target, AttackTypes attackType, float direction, Vector2 attackerPosition, bool isFirstHit)
+    {
+        var source = GetSource();
+        source.transform.position = new Vector3(attackerPosition.x, attackerPosition.y, 0f);
+
+        var hit = new HitInstance
+        {
+            Source = source,
+            AttackType = attackType,
+            DamageDealt = 1,
+            Multiplier = 1f,
+            Direction = direction,
+            MagnitudeMultiplier = 1f,
+            IsHeroDamage = true,
+            IsFirstHit = isFirstHit,
+            HitEffectsType = EnemyHitEffectsProfile.EffectsTypes.Full,
+            SilkGeneration = HitSilkGeneration.None,
+        };
+
+        Active = true;
+        try
+        {
+            foreach (var responder in HitTaker.GetHitResponders(target, 3, null))
+            {
+                try
+                {
+                    responder.Hit(hit);
+                }
+                catch (Exception e)
+                {
+                    Log.Exception($"Replayed hit on {responder.GetType().Name}", e);
+                }
+            }
         }
         finally
         {

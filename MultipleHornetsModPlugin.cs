@@ -21,8 +21,10 @@ public partial class MultipleHornetsModPlugin : BaseUnityPlugin
         ModConfig.Init(Config);
 
         PlayerSync.Init();
+        AttackEffects.Init();
         WorldServer.Init();
         WorldSync.Init();
+        HitSync.Init();
         EntityServer.Init();
         EnemySync.Init();
 

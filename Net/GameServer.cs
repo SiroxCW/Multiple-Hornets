@@ -70,6 +70,7 @@ internal sealed class GameServer
         Register(Msg.PlayerScene, OnPlayerScene);
         Register(Msg.PlayerState, OnPlayerState);
         Register(Msg.PlayerAnim, OnPlayerAnim);
+        Register(Msg.PlayerAttack, OnPlayerAttack);
         Register(Msg.Chat, OnChat);
     }
 
@@ -408,6 +409,12 @@ internal sealed class GameServer
         writer.Put(player.Id);
         writer.Put(player.LastAnim);
         BroadcastToScene(player.Scene, writer, Protocol.ChannelControl, DeliveryMethod.ReliableOrdered, player);
+    }
+
+    private void OnPlayerAttack(ServerPlayer player, NetPacketReader reader)
+    {
+        var writer = BeginRelay(Msg.PlayerAttack, player, reader);
+        BroadcastToScene(player.Scene, writer, Protocol.ChannelControl, DeliveryMethod.ReliableUnordered, player);
     }
 
     private void OnChat(ServerPlayer player, NetPacketReader reader)

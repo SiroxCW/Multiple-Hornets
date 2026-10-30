@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using HarmonyLib;
 using HutongGames.PlayMaker;
 using LiteNetLib;
@@ -44,6 +43,7 @@ internal static class EnemySync
     private const byte EventAnim = 2;
     private const byte EventHp = 3;
     private const byte EventDeath = 4;
+    private const byte EventHitEffect = 5;
 
     private static readonly Dictionary<uint, Entity> Entities = new();
     private static readonly Dictionary<Fsm, FsmBinding> FsmBindings = new();
@@ -292,6 +292,17 @@ internal static class EnemySync
         writer.Put((byte)hit.NailElement);
         writer.Put(heroPosition);
         Session.Client?.Send(writer, Protocol.ChannelEntity, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>Somebody hit an enemy we own. Whoever did not deal the hit still has to see it.</summary>
+    public static void OnOwnedHit(Entity entity, HitInstance hit)
+    {
+        if (!_audience) return;
+
+        var body = BeginEvent(EventHitEffect, entity);
+        body.Put(hit.GetActualDirection(entity.Transform, HitInstance.TargetType.Regular));
+        body.Put((byte)hit.AttackType);
+        body.Put(RemoteHit.Active ? entity.LastRemoteHitter : Session.LocalId);
     }
 
     public static void OnOwnedDied(Entity entity, float? direction, AttackTypes attackType)
@@ -567,23 +578,9 @@ internal static class EnemySync
         path = "";
 
         var go = health.gameObject;
-        var scene = go.scene;
-        if (!scene.IsValid() || scene.name == "DontDestroyOnLoad") return false;
-
         var hero = HeroController.SilentInstance;
         if (hero && go.transform.root == hero.transform.root) return false;
-
-        var parts = new List<string>();
-        for (var t = go.transform; t != null; t = t.parent)
-        {
-            if (t.name.Contains("(Clone)")) return false;
-            parts.Add($"{t.name}#{SameNameIndex(t)}");
-        }
-
-        parts.Reverse();
-        var builder = new StringBuilder(scene.name).Append(':');
-        builder.Append(string.Join("/", parts));
-        path = builder.ToString();
+        if (!ScenePaths.TryGetPath(go, out path)) return false;
 
         // FNV-1a
         var hash = 2166136261u;
@@ -595,31 +592,6 @@ internal static class EnemySync
 
         id = hash == 0 ? 1u : hash;
         return true;
-    }
-
-    private static int SameNameIndex(Transform transform)
-    {
-        var parent = transform.parent;
-        var index = 0;
-        if (parent)
-        {
-            for (var i = 0; i < parent.childCount; i++)
-            {
-                var sibling = parent.GetChild(i);
-                if (sibling == transform) return index;
-                if (sibling.name == transform.name) index++;
-            }
-
-            return index;
-        }
-
-        foreach (var root in transform.gameObject.scene.GetRootGameObjects())
-        {
-            if (root.transform == transform) return index;
-            if (root.name == transform.name) index++;
-        }
-
-        return index;
     }
 
     // ---- Owner side -------------------------------------------------------------------------------------------
@@ -835,10 +807,10 @@ internal static class EnemySync
         }
 
         Log.Debug($"Hit on {entity.Name} by {attacker} for {damage}, hp {entity.Health.hp}");
-        RemoteHit.Apply(entity, damage, attackType, direction, magnitude, stun, flags, element, attackerPosition);
-        entity.ForceHpSend = true;
         entity.LastRemoteHitter = attacker;
         entity.LastRemoteHitTime = Time.realtimeSinceStartup;
+        RemoteHit.Apply(entity, damage, attackType, direction, magnitude, stun, flags, element, attackerPosition);
+        entity.ForceHpSend = true;
     }
 
     // ---- Puppet side ------------------------------------------------------------------------------------------
@@ -926,6 +898,14 @@ internal static class EnemySync
                     Log.Debug($"Death of enemy {id:X8} from {sender}, here {(entity == null ? "not a puppet of them" : "puppet " + entity.Name)}");
                     if (entity != null) entity.ApplyDeath(dir, type);
                     else if (relevant && !Entities.ContainsKey(id)) PendingDeaths[id] = (dir, type);
+                    break;
+                }
+                case EventHitEffect:
+                {
+                    var direction = reader.GetFloat();
+                    var type = (AttackTypes)reader.GetByte();
+                    var attacker = reader.GetUShort();
+                    if (attacker != Session.LocalId) entity?.ShowHitEffect(direction, type);
                     break;
                 }
                 default:

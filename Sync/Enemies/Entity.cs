@@ -99,6 +99,7 @@ internal sealed class Entity
     private float _remoteScaleX = 1f;
     private float _remoteRotation;
     private bool _remoteFlipX;
+    private readonly IHitEffectReciever? _hitEffects;
     private readonly List<MonoBehaviour> _enabledMovers = new();
     private float _deathAppliedAt = -1f;
     private int _deathAttempts;
@@ -112,6 +113,7 @@ internal sealed class Entity
         Transform = health.transform;
         Body = health.GetComponent<Rigidbody2D>();
         Sprite = health.GetComponent<tk2dBaseSprite>();
+        _hitEffects = health.GetComponent<IHitEffectReciever>();
 
         // These move and animate an enemy by themselves, which on a puppet fights what the owner does.
         Movers.AddRange(health.GetComponents<Crawler>());
@@ -306,6 +308,13 @@ internal sealed class Entity
 
         var clip = animator.GetClipByName(clipName);
         if (clip != null) animator.Play(clip);
+    }
+
+    /// <summary>Flash and blood of a hit somebody else dealt. The damage itself arrives from the owner.</summary>
+    public void ShowHitEffect(float direction, AttackTypes attackType)
+    {
+        if (Health.isDead || !GameObject.activeInHierarchy || _hitEffects == null) return;
+        _hitEffects.ReceiveHitEffect(new HitInstance { Direction = direction, AttackType = attackType });
     }
 
     public void ApplyHp(int hp)

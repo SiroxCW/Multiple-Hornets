@@ -97,17 +97,20 @@ internal static class HealthTakeDamagePatch
         try
         {
             var entity = EnemySync.GetEntity(__instance);
-            if (entity == null || RemoteHit.Active || !IsFromLocalHero(hitInstance)) return;
-
-            if (!entity.IsPuppet)
-            {
-                entity.LastLocalEngage = Time.realtimeSinceStartup;
-                return;
-            }
+            if (entity == null) return;
 
             var target = __instance.sendDamageTo ? __instance.sendDamageTo : __instance;
             var damage = __state - target.hp;
-            if (damage > 0) EnemySync.OnPuppetDamaged(entity, damage, hitInstance, extraDamage: false);
+            var isLocalHit = !RemoteHit.Active && IsFromLocalHero(hitInstance);
+
+            if (!entity.IsPuppet)
+            {
+                if (isLocalHit) entity.LastLocalEngage = Time.realtimeSinceStartup;
+                if (damage > 0 && (isLocalHit || RemoteHit.Active)) EnemySync.OnOwnedHit(entity, hitInstance);
+                return;
+            }
+
+            if (isLocalHit && damage > 0) EnemySync.OnPuppetDamaged(entity, damage, hitInstance, extraDamage: false);
         }
         catch (Exception e)
         {
