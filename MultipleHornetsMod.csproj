@@ -48,6 +48,7 @@
   <ItemGroup>
     <!-- Reference material of other mods, never compiled into this mod. -->
     <Compile Remove="REFERENCE/**" />
+    <Compile Remove="tests/**" />
     <None Remove="REFERENCE/**" />
     <EmbeddedResource Remove="REFERENCE/**" />
   </ItemGroup>

@@ -69,8 +69,14 @@ Every member's save carries the playthrough, so anyone of the group can host it 
 
 Settings like key bindings live in `BepInEx/config/io.github.siroxcw.multiplehornetsmod.cfg`.
 
+## Logs
+
+Every game start writes its own file to `BepInEx/MultipleHornets-logs/`, the last 10 are kept. When something goes
+wrong in co-op, the files of all players from that session are what is needed to find out why.
+
 ## Known limitations
 
 - Enemies created at runtime (for example some summons) are not shared: each player fights their own copy.
 - Enemies always target the player who currently owns them.
+- Only needle attacks show their effect on other players, silk skills and tools do not yet.
 - Direct IP connections only for now (no Steam lobbies).

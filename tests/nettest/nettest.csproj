@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Condition="Exists('../../SilksongPath.props')" Project="../../SilksongPath.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <NoWarn>$(NoWarn);CS8632;CS0618</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(NuGetPackageRoot)bepinex.baselib/5.4.20/lib/netstandard2.0/BepInEx.dll" Link="BepInEx.dll" CopyToOutputDirectory="PreserveNewest" />
+    <PackageReference Include="LiteNetLib" Version="1.3.1" />
+    <PackageReference Include="BepInEx.Core" Version="5.4.21" />
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(SilksongFolder)/Hollow Knight Silksong_Data/Managed/UnityEngine.CoreModule.dll</HintPath></Reference>
+    <Compile Include="../../Net/GameServer.cs" />
+    <Compile Include="../../Net/GameClient.cs" />
+    <Compile Include="../../Net/Protocol.cs" />
+    <Compile Include="../../Net/ServerSettings.cs" />
+    <Compile Include="../../Core/Log.cs" /><Compile Include="../../Core/SessionLog.cs" />
+    <Compile Include="../../Core/ModConfig.cs" />
+    <Compile Include="../../Core/DataPaths.cs" />
+    <Compile Include="../../Sync/World/WorldTypes.cs" />
+    <Compile Include="../../Sync/World/WorldServer.cs" />
+    <Compile Include="../../Sync/Enemies/EntityServer.cs" />
+    <Compile Include="../../Game/Session.cs" />
+    <Compile Include="../../UI/ChatLog.cs" />
+  </ItemGroup>
+</Project>
