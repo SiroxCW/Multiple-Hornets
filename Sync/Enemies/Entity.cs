@@ -365,6 +365,19 @@ internal sealed class Entity
         }
     }
 
+    /// <summary>
+    /// The body of a puppet stays kinematic whatever its FSM says, so this is the only record of what the FSM wanted.
+    /// Whoever takes over gets it back. A stale one lets a summon parked outside the room fall out of the world, and
+    /// the game then kills it every frame, because one that only plays dead never counts as dead.
+    /// </summary>
+    public void RememberBodyType(GameObject? target, bool kinematic)
+    {
+        if (!IsPuppet || !Body || target != Body!.gameObject) return;
+
+        _storedBodyType = kinematic ? RigidbodyType2D.Kinematic : RigidbodyType2D.Dynamic;
+        _bodyStored = true;
+    }
+
     /// <summary>How long a refused event is considered fresh enough to replay.</summary>
     public const float RecentEventWindow = 3f;
 

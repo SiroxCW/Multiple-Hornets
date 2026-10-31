@@ -48,6 +48,11 @@ Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_
 - [ ] Both freeze at Moss Mother and both hold K, so you respawn in `tut_03` without leaving it. Walk back and start the fight: it's one boss, moving the same for both of you, and a hit by either player counts on the same health.
 - [ ] One player goes down in a cocoon during that fight: the boss stays visible for them and keeps fighting the other player. After being freed, the boss is still there.
 - [ ] The log line `Room Tut_03 loaded again` should appear after each respawn in the room.
+
+**Frozen game after a cocoon (the bug from your last test)**
+- [ ] Moss Mother has summoned and lost her crawlers at least once. The player who owned them goes down in a cocoon: wait at least 10 seconds. Time keeps running for both of you, with no freeze.
+- [ ] She summons crawlers again after that handover: they drop in as usual, can be killed, and disappear normally.
+- [ ] The log should have no long run of `Summon Control/Corpse Away` lines for the same crawler.
 - [ ] Alone in a room: kill some enemies, die and respawn in that room. The enemies are back, like in the normal game.
 
 **Getting out**

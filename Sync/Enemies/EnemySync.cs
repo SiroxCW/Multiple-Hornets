@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using HutongGames.PlayMaker;
+using HutongGames.PlayMaker.Actions;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using MultipleHornetsMod.Core;
@@ -214,6 +215,11 @@ internal static class EnemySync
             finally
             {
                 PuppetActionOwner = outerOwner;
+            }
+
+            if (action is SetIsKinematic2d setKinematic && FsmBindings.TryGetValue(state.Fsm, out var binding))
+            {
+                binding.Entity.RememberBodyType(state.Fsm.GetOwnerDefaultTarget(setKinematic.gameObject), setKinematic.isKinematic.Value);
             }
 
             if (!action.Finished) state.ActiveActions.Add(action);
