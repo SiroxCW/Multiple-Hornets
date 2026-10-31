@@ -59,7 +59,7 @@ internal sealed class SceneDomain : IWorldDomain
     private readonly List<(string Key, int Value, WorldCategory Category)> _hookReports = new();
     private readonly List<(PersistentBoolItem Item, float Time)> _delayedRefreshes = new();
     private string _scannedScene = "";
-    private float _rescanTimer;
+    private float _nextRescan;
 
     public static SceneDomain Instance { get; } = new();
 
@@ -112,8 +112,7 @@ internal sealed class SceneDomain : IWorldDomain
         foreach (var (key, value, category) in _hookReports) reporter.Report(key, value, category);
         _hookReports.Clear();
 
-        _rescanTimer -= Time.unscaledDeltaTime;
-        if (_scannedScene != GameState.CurrentScene || _rescanTimer <= 0f) Rescan();
+        if (_scannedScene != GameState.CurrentScene || Time.unscaledTime >= _nextRescan) Rescan();
 
         RunDelayedRefreshes();
 
@@ -327,7 +326,7 @@ internal sealed class SceneDomain : IWorldDomain
     private void Rescan()
     {
         _scannedScene = GameState.CurrentScene;
-        _rescanTimer = RescanInterval;
+        _nextRescan = Time.unscaledTime + RescanInterval;
 
         _roomBools.Clear();
         _roomBools.AddRange(Object.FindObjectsByType<PersistentBoolItem>(FindObjectsInactive.Include, FindObjectsSortMode.None));
