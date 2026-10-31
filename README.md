@@ -1,7 +1,13 @@
+<div align="center">
+
 # Multiple Hornets
+
+![](https://raw.githubusercontent.com/michei69/disclaimers/refs/heads/main/ai/x4.png)
 
 An all-in-one co-op multiplayer mod for Hollow Knight: Silksong. Play together in one shared Pharloom:
 see each other, fight the same enemies and bosses, and share all progression.
+
+</div>
 
 ## Features
 
