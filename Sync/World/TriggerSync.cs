@@ -23,6 +23,8 @@ internal static class TriggerSync
 {
     private const string ReturnBattleFsm = "Start Return Battle";
     private const string OpenGatesEvent = "BG OPEN";
+    private const float ReachRange = 25f;
+    private const int TerrainMask = 1 << (int)GlobalEnums.PhysLayers.TERRAIN;
 
     /// <summary>Only these are shared. Most objects with a trigger are personal: reminders, sounds, area titles.</summary>
     private static readonly Rule[] Rules =
@@ -53,14 +55,69 @@ internal static class TriggerSync
             },
             new[] { "Take Control" },
             collectedByOne: true),
+
+        // What starts a boss arena when the hero walks in. Bosses come out of these, without this they stay hidden or
+        // asleep for everybody but the one who walked in. Whoever is elsewhere in the room follows when they get
+        // there, the gates would lock them out otherwise.
+        new(new[] { "boss scene" },
+            new[] { "Idle", "Ready", "Restart Ready", "Solo Ready", "Meet Ready", "Remeet Ready", "Start Tension" },
+            new[] { "Arena Start", "Waiting For Pos", "Wake", "Remeet 1", "Gate Sfx", "Enter", "Battle Start" },
+            arena: true),
+        new(new[] { "wisp pyre effigy" }, new[] { "Dormant", "Set HP", "Close Gates" }, new[] { "Close Gates", "Intro" }, arena: true),
+        new(new[] { "centipede control" }, new[] { "Dormant" }, new[] { "Set HP" }, arena: true),
+        new(new[] { "wake scene" }, new[] { "Idle" }, new[] { "Transition to Silent", "State" }, arena: true),
+        new(new[] { "dancer control" }, new[] { "Dormant" }, new[] { "Gate Close" }, arena: true),
+        new(new[] { "vampire gnat scene" }, new[] { "Idle" }, new[] { "Enter" }, arena: true),
+        new(new[] { "wake range" }, new[] { "Idle" }, new[] { "Wake" }, arena: true),
+        new(new[] { "door closer" }, new[] { "State 1" }, new[] { "State 2" }, arena: true),
+        new(new[] { "battle start" }, new[] { "Idle" }, new[] { "Enter" }, arena: true),
+        new(new[] { "song pilgrim scene" }, new[] { "Unwoken" }, new[] { "Wake" }, arena: true),
+        new(new[] { "initial servitor scene" }, new[] { "Idle" }, new[] { "Send" }, arena: true),
+        new(new[] { "intro control" }, new[] { "Idle" }, new[] { "Scene Setup" }, arena: true),
     };
 
     /// <summary>This runs for every state of every FSM in the game, the state name rules nearly all of them out.</summary>
     private static readonly HashSet<string> WatchedStates = new(Rules.SelectMany(rule => rule.To));
 
+    private static readonly List<WaitingStart> Waiting = new();
+    private static string _waitingScene = "";
     private static bool _applying;
 
     public static void Init() => Session.RegisterHandler(Msg.WorldTrigger, OnWorldTrigger);
+
+    /// <summary>Arenas somebody else started, for as long as our hero is not there.</summary>
+    public static void Update()
+    {
+        if (Waiting.Count == 0) return;
+
+        if (GameState.CurrentScene != _waitingScene)
+        {
+            Waiting.Clear();
+            return;
+        }
+
+        // In order: some arenas start in two steps, closing the gates first.
+        if (!CanReach(Waiting[0].Position)) return;
+
+        while (Waiting.Count > 0)
+        {
+            var start = Waiting[0];
+            Waiting.RemoveAt(0);
+
+            var target = ScenePaths.Find(start.Path);
+            if (target && target!.activeInHierarchy) Apply(target, start.Path, start.Fsm, start.State, start.Position);
+        }
+    }
+
+    /// <summary>Whether the hero could walk up to a place in this room right now, nothing solid is in between.</summary>
+    public static bool CanReach(Vector2 position)
+    {
+        var hero = HeroController.SilentInstance;
+        if (!hero) return false;
+
+        Vector2 from = hero!.transform.position;
+        return Vector2.Distance(from, position) <= ReachRange && !Physics2D.Linecast(from, position, TerrainMask);
+    }
 
     public static void OnFsmEnterState(Fsm fsm, FsmState state)
     {
@@ -124,6 +181,22 @@ internal static class TriggerSync
 
         var rule = FindRule(target.name);
         if (rule == null || !rule.To.Contains(stateName)) return;
+
+        if (rule.Arena && (Waiting.Count > 0 || !CanReach(position)))
+        {
+            Log.Debug($"Object {path} waits for us to get there");
+            _waitingScene = GameState.CurrentScene;
+            Waiting.Add(new WaitingStart(path, fsmName, stateName, position));
+            return;
+        }
+
+        Apply(target, path, fsmName, stateName, position);
+    }
+
+    private static void Apply(GameObject target, string path, string fsmName, string stateName, Vector2 position)
+    {
+        var rule = FindRule(target.name);
+        if (rule == null) return;
 
         foreach (var component in target.GetComponents<PlayMakerFSM>())
         {
@@ -242,12 +315,13 @@ internal static class TriggerSync
 
     private sealed class Rule
     {
-        public Rule(string[] names, string[] from, string[] to, bool collectedByOne = false)
+        public Rule(string[] names, string[] from, string[] to, bool collectedByOne = false, bool arena = false)
         {
             Names = names;
             From = from;
             To = to;
             CollectedByOne = collectedByOne;
+            Arena = arena;
         }
 
         /// <summary>Parts of the object's name, lower case.</summary>
@@ -261,5 +335,24 @@ internal static class TriggerSync
 
         /// <summary>Whoever starts it gets it, for the others it disappears instead of starting too.</summary>
         public bool CollectedByOne { get; }
+
+        /// <summary>It closes something around the room, the others follow once they are there.</summary>
+        public bool Arena { get; }
+    }
+
+    private readonly struct WaitingStart
+    {
+        public WaitingStart(string path, string fsm, string state, Vector2 position)
+        {
+            Path = path;
+            Fsm = fsm;
+            State = state;
+            Position = position;
+        }
+
+        public string Path { get; }
+        public string Fsm { get; }
+        public string State { get; }
+        public Vector2 Position { get; }
     }
 }

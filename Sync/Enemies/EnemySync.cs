@@ -200,6 +200,8 @@ internal static class EnemySync
             action.Init(state);
             action.Entered = true;
 
+            var outerOwner = PuppetActionOwner;
+            PuppetActionOwner = state.Fsm.GameObject;
             try
             {
                 action.OnEnter();
@@ -208,6 +210,10 @@ internal static class EnemySync
             {
                 action.Finished = true;
                 Log.Exception($"Puppet action {action.GetType().Name} in {state.Name}", e);
+            }
+            finally
+            {
+                PuppetActionOwner = outerOwner;
             }
 
             if (!action.Finished) state.ActiveActions.Add(action);
@@ -222,6 +228,9 @@ internal static class EnemySync
     public static bool IsPuppetFsm(Fsm fsm) =>
         FsmBindings.Count > 0 && FsmBindings.TryGetValue(fsm, out var binding) && binding.Entity.IsPuppet &&
         binding.Entity.IsValid && !binding.Entity.Health.isDead;
+
+    /// <summary>The enemy whose puppet action is starting right now, what it calls was not decided in this game.</summary>
+    public static GameObject? PuppetActionOwner { get; private set; }
 
     /// <summary>Set while somebody takes over an enemy and restarts the state the previous owner left it in.</summary>
     public static bool TakingOver { get; set; }

@@ -49,6 +49,7 @@ internal sealed class ModuleClient
         Client.Register(Msg.PlayerCloak, r => Events.Add($"cloak from {r.GetUShort()} {r.GetInt()}"));
         Client.Register(Msg.PlayerMapPosition, r => Events.Add($"map from {r.GetUShort()}"));
         Client.Register(Msg.WorldTrigger, r => Events.Add($"trigger from {r.GetUShort()} {r.GetString()}"));
+        Client.Register(Msg.WorldBattle, r => Events.Add($"battle from {r.GetUShort()} {r.GetString()}"));
         Client.Register(Msg.WorldHit, r => Events.Add($"worldhit from {r.GetUShort()} {r.GetString()}"));
         Client.Register(Msg.PlayerAttack, r => Events.Add($"attack from {r.GetUShort()} {r.GetString()}"));
         Client.Register(Msg.EntityOwner, r => Events.Add($"owner {r.GetString()} {r.GetUInt()} {r.GetUShort()}"));
@@ -302,6 +303,7 @@ internal static class ServerModuleTests
         b.Events.Clear(); late.Events.Clear();
         a.Send(Msg.WorldHit, Protocol.ChannelEntity, w => w.Put("R1:Root#0"));
         a.Send(Msg.WorldTrigger, Protocol.ChannelEntity, w => w.Put("R1:Wire#0"));
+        a.Send(Msg.WorldBattle, Protocol.ChannelEntity, w => w.Put("R1:Battle#0"));
         a.Send(Msg.PlayerAttack, Protocol.ChannelControl, w => w.Put("Attacks/Slash"));
         a.Send(Msg.PlayerMapPosition, Protocol.ChannelControl, w => { w.Put(1f); w.Put(2f); });
         a.Send(Msg.PlayerCloak, Protocol.ChannelControl, w => w.Put(0x3060E0));
@@ -309,6 +311,7 @@ internal static class ServerModuleTests
         check(b.Events.Contains($"worldhit from {a.Id} R1:Root#0") && !late.Events.Any(e => e.StartsWith("worldhit")), "object hits reach the room only");
         check(b.Events.Contains($"map from {a.Id}") && late.Events.Contains($"map from {a.Id}") && !a.Events.Contains($"map from {a.Id}"), "map positions reach every room");
         check(b.Events.Contains($"trigger from {a.Id} R1:Wire#0") && !late.Events.Any(e => e.StartsWith("trigger")), "started objects reach the room only");
+        check(b.Events.Contains($"battle from {a.Id} R1:Battle#0") && !late.Events.Any(e => e.StartsWith("battle")), "started battles reach the room only");
         check(b.Events.Contains($"attack from {a.Id} Attacks/Slash") && !late.Events.Any(e => e.StartsWith("attack")), "attacks reach the room only");
 
         check(late.Events.Contains($"cloak from {a.Id} {0x3060E0}") && !a.Events.Any(e => e.StartsWith("cloak")), "cloak colors reach everybody else");
