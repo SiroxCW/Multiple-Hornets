@@ -65,5 +65,5 @@ Same idea as section 3, for boss rooms started by a controller: `belltown_08` (F
 These are not bugs in this build, and I left them as they are on purpose:
 
 - **Act 3 is not shared.** Each player's story act is their own, because changing it means a respawn and a wake-up sequence that I don't want to force on someone mid-play. If only one player reaches Act 3, your rooms will differ. Tell me if you get that far and it's a problem.
-- **Steel Servant** (`bone_steel_servant`) holds the hero for a conversation, so I didn't share its opening. Its waves still start for the other player.
+- **Steel Servant** (`bone_steel_servant`) holds the hero for a conversation, so I didn't share its opening. Its waves should still start for the other player, but I didn't confirm that it starts them the same way as other arenas.
 - **Lifts** still aren't shared.
