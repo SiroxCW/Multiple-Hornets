@@ -82,6 +82,8 @@ Good rooms: `tut_03` (wave arena), `belltown_08`, `ward_02_boss`, `bone_east_12`
 - [ ] Die in a fight: no death screen, your hero is gone, the cocoon appears at that spot and the text says you are in a cocoon. You can't move, attack or take damage.
 - [ ] The cocoon is visible to both players, not hidden behind the room. I drew it myself as a plain shape, so tell me if it looks bad.
 - [ ] The label shows `1/3` and counts down the next hit. Hits during the countdown do nothing. Only the third hit frees you.
+- [ ] The cocoon flashes pink on a hit that counts, stays dark during the cooldown and turns bright again when it can be hit. Tell me if dark and bright are hard to tell apart in a dark room.
+- [ ] The label still shows with `ShowNames` turned off in the config.
 - [ ] Freed: you appear again with 2 masks, can move, the masks on the HUD are right, and you can't be hurt for about 2 seconds.
 - [ ] **Check this closely:** after being freed, everything works: jumping, attacking, silk skills, healing, map, inventory, pause. This is the part I trust least, because I step in before the game's own death code.
 - [ ] **Check this closely:** hitting the cocoon has no odd effect on the rescuer, such as a bounce or a wrong sound.

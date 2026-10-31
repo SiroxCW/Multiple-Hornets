@@ -344,6 +344,11 @@ internal sealed class CocoonView : MonoBehaviour, IHitResponder
     private const float FlashTime = 0.2f;
     private const float RepeatInterval = 0.3f;
 
+    private static readonly Color FlashColor = new(1f, 0.75f, 0.75f);
+
+    /// <summary>Only a bright cocoon can be hit, so nobody has to read anything in the middle of a fight.</summary>
+    private static readonly Color CooldownColor = new(0.4f, 0.4f, 0.45f);
+
     private static Sprite? _sprite;
 
     private SpriteRenderer _renderer = null!;
@@ -429,7 +434,8 @@ internal sealed class CocoonView : MonoBehaviour, IHitResponder
 
     private void Update()
     {
-        _renderer.color = Time.unscaledTime < _flashUntil ? new Color(1f, 0.75f, 0.75f) : Color.white;
+        var now = Time.unscaledTime;
+        _renderer.color = now < _flashUntil ? FlashColor : now < _cooldownUntil ? CooldownColor : Color.white;
     }
 
     /// <summary>Drawn here so nothing depends on where the game keeps its own. It has to outlive room changes.</summary>

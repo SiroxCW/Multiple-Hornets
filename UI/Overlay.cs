@@ -97,6 +97,7 @@ internal sealed class Overlay : MonoBehaviour
         GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1f));
 
         if (ModConfig.ShowNames) DrawNameTags(scale);
+        DrawCocoonTags(scale);
         DrawStatus(width);
         DrawFightNotice(width);
         DrawChat();
@@ -161,6 +162,13 @@ internal sealed class Overlay : MonoBehaviour
             var rect = new Rect(x - 150f, y - 30f, 300f, 30f);
             DrawShadowedLabel(rect, remote.PlayerName, _styles!.NameTag, Color.white);
         }
+    }
+
+    /// <summary>Not a name tag: it says when a cocoon can be hit, so it does not go away with the names.</summary>
+    private void DrawCocoonTags(float scale)
+    {
+        var camera = GameState.MainCamera;
+        if (!camera) return;
 
         foreach (var cocoon in Cocoon.Shown)
         {
