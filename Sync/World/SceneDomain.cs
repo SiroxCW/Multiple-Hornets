@@ -231,6 +231,16 @@ internal sealed class SceneDomain : IWorldDomain
             var data = live!.ItemData;
             data.Value = value;
             sceneData.SetValue(data);
+
+            // One that already runs here gets to its end by itself. Jumping there takes the shortcut for coming back
+            // to a finished room, which skips what the last step sends out: a bell shrine's door would never open.
+            var sequence = live.GetComponent<StateChangeSequence>();
+            if (sequence && sequence!.stateValue > sequence.initialState)
+            {
+                Log.Debug($"Sequence {live.name} is running, it stays until it finished");
+                return;
+            }
+
             live.PreSetup();
             return;
         }

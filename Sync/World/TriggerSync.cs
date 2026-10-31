@@ -43,6 +43,17 @@ internal static class TriggerSync
         new(new[] { "hunter trap plate" }, new[] { "Idle", "Cam Check" }, new[] { "Step" }),
         new(new[] { "dust trap spike plate" }, new[] { "Idle" }, new[] { "Step" }),
 
+        // Paying a toll retracts the machine. Without this the saved state makes it jump to the end for everyone else.
+        new(new[] { "bell_toll_machine", "tube_toll_machine" },
+            new[] { "Inert", "Prompt", "End Interaction", "Set Extra PD Bool" },
+            new[] { "Retract Animation" }),
+        new(new[] { "bellway toll machine" }, new[] { "Inert", "Prompt", "End Interaction" }, new[] { "Return Control" }),
+
+        // A lift moves when the hero steps on it, and turns around for whoever stands under it or steps on it again.
+        new(new[] { "mines lift", "bonetown lift" },
+            new[] { "Up", "Down", "Up Inactive", "Down Inactive", "Unlock", "Move Up", "Move Down" },
+            new[] { "Bob", "Flip Dir", "Move Up" }),
+
         // A boss waiting in a web or returning to its arena: without this, one player has the arena and the others
         // still see the web, next to the real boss that follows the owner.
         new(new[] { "thick silk vines beast" }, new[] { "Idle" }, new[] { "Destroy" }, arena: true),
