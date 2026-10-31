@@ -2,7 +2,7 @@
 
 # :sewing_needle: Multiple Hornets
 
-[![GitHub license](https://img.shields.io/github/license/SiroxCW/multiple-hornets.svg?style=for-the-badge)](https://github.com/SiroxCW/Multiple-Hornets/blob/master/license)
+[![GitHub license](https://img.shields.io/github/license/SiroxCW/Multiple-Hornets.svg?style=for-the-badge)](https://github.com/SiroxCW/Multiple-Hornets/blob/master/license)
 
 ![](https://raw.githubusercontent.com/michei69/disclaimers/refs/heads/main/ai/x4.png)
 
@@ -93,3 +93,9 @@ wrong in co-op, the files of all players from that session are what is needed to
 - The cloak color only applies to Hornet's own sprite, not to separate objects showing her in some cutscenes. Each
   color uses up to about 64 MB of video memory per sprite sheet.
 - Direct IP connections only for now (no Steam lobbies).
+
+## License
+
+Multiple Hornets is licensed under the [GNU General Public License v3.0](LICENSE).
+
+Credits: [SiroxCW](https://github.com/SiroxCW) and [phimaster0303](https://github.com/phimaster0303).
