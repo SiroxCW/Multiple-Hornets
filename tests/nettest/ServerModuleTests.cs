@@ -338,6 +338,115 @@ internal static class ServerModuleTests
         try { Directory.Delete(dir, true); } catch { }
 
         RunFightGate(check);
+        RunCocoon(check);
+    }
+
+    private static void RunCocoon(Action<bool, string> check)
+    {
+        const int port = 27023;
+        var server = new GameServer();
+        server.Start(port, "", 8, out _);
+        _ = new CocoonServer(server);
+
+        var a = new ModuleClient("A");
+        var b = new ModuleClient("B");
+        var c = new ModuleClient("C");
+        var clients = new List<ModuleClient> { a, b, c };
+        foreach (var client in clients)
+        {
+            client.Client.Register(Msg.CocoonDown, r => client.Events.Add($"down {r.GetUShort()}"));
+            client.Client.Register(Msg.CocoonHit, r => client.Events.Add($"hit by {r.GetUShort()}"));
+            client.Client.Register(Msg.CocoonState, r => client.Events.Add($"state {r.GetUShort()} {r.GetByte()}"));
+            client.Client.Register(Msg.CocoonEnd, r => client.Events.Add($"end {r.GetUShort()}"));
+            client.Client.Register(Msg.CocoonWipe, _ => client.Events.Add("wipe"));
+        }
+
+        void Pump(int ms = 150)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < ms)
+            {
+                server.Poll();
+                foreach (var client in clients) client.Client.Poll();
+                System.Threading.Thread.Sleep(5);
+            }
+        }
+
+        void Clear() { foreach (var client in clients) client.Events.Clear(); }
+        void Down(ModuleClient client) => client.Send(Msg.CocoonDown, Protocol.ChannelControl, w => { w.Put(1f); w.Put(2f); });
+        void Hit(ModuleClient client, ModuleClient target) => client.Send(Msg.CocoonHit, Protocol.ChannelControl, w => w.Put(target.Id));
+        void End(ModuleClient client) => client.Send(Msg.CocoonEnd, Protocol.ChannelControl, _ => { });
+
+        a.Connect(port);
+        b.Connect(port);
+        c.Connect(port);
+        Pump(400);
+        a.EnterScene("R1");
+        b.EnterScene("R1");
+        c.EnterScene("R2");
+        Pump();
+
+        Down(a);
+        Pump();
+        check(b.Events.Contains($"down {a.Id}") && !a.Events.Any(e => e.StartsWith("down")) && !c.Events.Any(e => e.StartsWith("down")), "a cocoon shows up for the room only");
+        check(!a.Events.Contains("wipe"), "with a teammate in the room nothing ends");
+
+        Hit(b, a);
+        Hit(c, a);
+        Pump();
+        check(a.Events.Count(e => e == $"hit by {b.Id}") == 1 && !a.Events.Contains($"hit by {c.Id}"), "only somebody in the room can hit a cocoon");
+
+        Clear();
+        Hit(a, b);
+        Pump();
+        check(!b.Events.Any(e => e.StartsWith("hit")), "somebody who is not in a cocoon can't get a cocoon hit");
+
+        a.Send(Msg.CocoonState, Protocol.ChannelControl, w => { w.Put((byte)1); w.Put(5f); });
+        Pump();
+        check(b.Events.Contains($"state {a.Id} 1") && !c.Events.Any(e => e.StartsWith("state")), "the state of a cocoon reaches the room");
+
+        Clear();
+        End(a);
+        Pump();
+        check(b.Events.Contains($"end {a.Id}"), "a freed hero removes the cocoon");
+        Hit(b, a);
+        Pump();
+        check(!a.Events.Any(e => e.StartsWith("hit")), "a cocoon that is gone can't be hit");
+
+        Clear();
+        Down(a);
+        Pump();
+        Down(b);
+        Pump();
+        check(a.Events.Contains("wipe") && b.Events.Contains("wipe") && !c.Events.Contains("wipe"), "everybody down in the room ends it for that room");
+        check(a.Events.Contains($"end {b.Id}") || b.Events.Contains($"end {a.Id}"), "the cocoons are gone after that");
+
+        Clear();
+        Down(a);
+        Pump();
+        b.EnterScene("R3");
+        Pump();
+        check(a.Events.Contains("wipe"), "the last teammate leaving the room ends it");
+
+        b.EnterScene("R1");
+        Pump();
+        Clear();
+        Down(a);
+        Pump();
+        a.EnterScene("R4");
+        Pump();
+        check(b.Events.Contains($"end {a.Id}") && !b.Events.Contains("wipe"), "somebody quitting takes their cocoon along");
+
+        a.EnterScene("R1");
+        Pump();
+        Clear();
+        Down(a);
+        Pump();
+        b.Client.Disconnect();
+        Pump();
+        check(a.Events.Contains("wipe"), "the last teammate disconnecting ends it");
+
+        server.Stop();
     }
 
     private static void RunFightGate(Action<bool, string> check)

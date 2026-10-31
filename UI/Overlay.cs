@@ -161,11 +161,22 @@ internal sealed class Overlay : MonoBehaviour
             var rect = new Rect(x - 150f, y - 30f, 300f, 30f);
             DrawShadowedLabel(rect, remote.PlayerName, _styles!.NameTag, Color.white);
         }
+
+        foreach (var cocoon in Cocoon.Shown)
+        {
+            if (!cocoon) continue;
+
+            var screen = camera!.WorldToScreenPoint(cocoon.transform.position + Vector3.up * 1.4f);
+            if (screen.z < 0f) continue;
+
+            var rect = new Rect(screen.x / scale - 250f, (Screen.height - screen.y) / scale - 30f, 500f, 30f);
+            DrawShadowedLabel(rect, cocoon.Label, _styles!.NameTag, Color.white);
+        }
     }
 
     private void DrawFightNotice(float width)
     {
-        if (!FightGate.TryGetNotice(out var title, out var detail)) return;
+        if (!Cocoon.TryGetNotice(out var title, out var detail) && !FightGate.TryGetNotice(out title, out detail)) return;
 
         var styles = _styles!;
         var y = 170f;

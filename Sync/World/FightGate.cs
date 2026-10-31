@@ -23,6 +23,7 @@ internal static class FightGate
 {
     private const float GiveUpSeconds = 1.5f;
     private const float FollowUpSeconds = 10f;
+    private const string OpenGatesEvent = "BG OPEN";
 
     /// <summary>Started in this room, or part of what started. Some fights start in two steps or through a second object.</summary>
     private static readonly HashSet<string> Started = new();
@@ -34,6 +35,8 @@ internal static class FightGate
     private static Vector3 _position;
     private static float _giveUpHeld;
     private static float _followUpsUntil;
+    private static bool _fightRunning;
+    private static bool _sawBoss;
 
     public static void Init()
     {
@@ -44,6 +47,12 @@ internal static class FightGate
 
     public static bool IsHolding => _held != null;
 
+    /// <summary>
+    /// A fight that was held and started, for as long as it was not seen to end. Being wrong about the end only means
+    /// a teammate has to free somebody from a cocoon by hand, so a fight with no clear end just counts as running.
+    /// </summary>
+    public static bool IsFightRunning => _fightRunning || BattleSync.IsAnyRunning;
+
     public static void Update()
     {
         var scene = GameState.CurrentScene;
@@ -53,7 +62,15 @@ internal static class FightGate
             _scene = scene;
             Started.Clear();
             _followUpsUntil = 0f;
+            EndFight();
             Drop();
+        }
+
+        // Most boss arenas never send the gate event, what they do have is a boss that was alive and now is not.
+        if (_fightRunning)
+        {
+            if (EnemySync.HasLivingBoss) _sawBoss = true;
+            else if (_sawBoss) EndFight();
         }
 
         if (_held != null) Hold();
@@ -64,13 +81,21 @@ internal static class FightGate
     {
         if (!Session.IsConnected) return false;
 
+        // What opens the gates of an arena, sent by whatever ends the fight.
+        if (_fightRunning && transition.EventName == OpenGatesEvent) EndFight();
+
         var state = transition.ToState;
         if (!TriggerSync.IsArenaStart(fsm, state)) return false;
 
         try
         {
             // A teammate's hit replayed on a boss web is not our hero being there.
-            return !MayStart(fsm.GameObject, () => TriggerSync.StartHeld(fsm, state), !RemoteHit.Active);
+            return !MayStart(fsm.GameObject, () =>
+            {
+                _fightRunning = true;
+                _sawBoss = false;
+                TriggerSync.StartHeld(fsm, state);
+            }, !RemoteHit.Active);
         }
         catch (Exception e)
         {
@@ -161,10 +186,13 @@ internal static class FightGate
     {
         Log.Debug("Gave up waiting for a fight");
         Cancel();
+        Cocoon.DieForReal(hero);
+    }
 
-        hero.playerData.healthBlue = 0;
-        hero.playerData.health = 0;
-        hero.CheckDeathCatch();
+    private static void EndFight()
+    {
+        _fightRunning = false;
+        _sawBoss = false;
     }
 
     private static void Cancel()
@@ -309,7 +337,13 @@ internal static class BattleTouchPatch
 [HarmonyPatch(typeof(HeroController), nameof(HeroController.TakeDamage))]
 internal static class HeldHeroDamagePatch
 {
-    private static bool Prefix() => !FightGate.IsHolding;
+    private static bool Prefix(GlobalEnums.HazardType hazardType)
+    {
+        if (FightGate.IsHolding || Cocoon.IsProtected) return false;
+
+        Cocoon.LastHazard = hazardType;
+        return true;
+    }
 }
 
 [HarmonyPatch(typeof(HeroController), nameof(HeroController.CanTakeDamage))]
@@ -317,7 +351,7 @@ internal static class HeldHeroCanTakeDamagePatch
 {
     private static bool Prefix(ref bool __result)
     {
-        if (!FightGate.IsHolding) return true;
+        if (!FightGate.IsHolding && !Cocoon.IsProtected) return true;
 
         __result = false;
         return false;

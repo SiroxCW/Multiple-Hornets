@@ -8,7 +8,7 @@ internal static class Protocol
     /// <summary>
     /// Bumped whenever the wire format changes. Client and server must match exactly.
     /// </summary>
-    public const int Version = 7;
+    public const int Version = 8;
 
     public const string AppKey = "MultipleHornets";
     public const int DefaultPort = 26960;
@@ -78,6 +78,13 @@ internal enum Msg : byte
     FightCancel = 55,
     FightStatus = 56,
     FightRelease = 57,
+
+    // Dying in a running fight
+    CocoonDown = 58,
+    CocoonHit = 59,
+    CocoonState = 60,
+    CocoonEnd = 61,
+    CocoonWipe = 62,
 }
 
 internal static class NetExtensions

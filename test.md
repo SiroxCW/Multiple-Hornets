@@ -45,8 +45,8 @@ Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_
 - [ ] Disconnect one player while the other is frozen: the frozen player's fight starts by itself.
 
 **Awkward cases**
-- [ ] **Coming back:** one player dies during the fight and returns to the room. They should go straight back in without a freeze, while the survivor is still in the room.
-- [ ] **Both die:** the room empties. Coming back waits for both again.
+- [ ] **Coming back:** one player quits or disconnects during the fight and returns to the room. They should go straight back in without a freeze, while the other player is still there.
+- [ ] **Both go down:** the room empties. Coming back waits for both again.
 - [ ] **Different rooms:** each player freezes at a different fight. Nothing starts until one of them gives up. This is on purpose, each sees where the other is.
 - [ ] **Double touch:** both step in at the same moment. The fight starts once and ends normally.
 - [ ] **Web hit (`bone_05_boss`):** one player hits the web and freezes. The other sees the web still there and has to hit it too.
@@ -72,21 +72,57 @@ Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_
 
 If a fight starts without a freeze, send me the room. It's usually one line to add.
 
-## 4. Arena details
+## 4. Dying in a fight puts you in a cocoon (new, test this second)
 
-- [ ] **Joining late:** a player who dies during a wave arena and returns: the arena catches up to the current wave, dead enemies stay dead, the fight can still be finished, and the gates close behind them once they're in.
+If you die in a running arena or boss fight with a teammate in the room, you don't respawn. Your hero disappears and a cocoon appears. A teammate frees you with 3 hits, and each hit needs 5 seconds before the next one counts, so that takes at least 10 seconds. You come back with 2 masks and 2 seconds without taking damage. Dying anywhere else is a normal death.
+
+Good rooms: `tut_03` (wave arena), `belltown_08`, `ward_02_boss`, `bone_east_12` (Lace), `shellwood_22` (Seth).
+
+**The basics**
+- [ ] Die in a fight: no death screen, your hero is gone, the cocoon appears at that spot and the text says you are in a cocoon. You can't move, attack or take damage.
+- [ ] The cocoon is visible to both players, not hidden behind the room. I drew it myself as a plain shape, so tell me if it looks bad.
+- [ ] The label shows `1/3` and counts down the next hit. Hits during the countdown do nothing. Only the third hit frees you.
+- [ ] Freed: you appear again with 2 masks, can move, the masks on the HUD are right, and you can't be hurt for about 2 seconds.
+- [ ] **Check this closely:** after being freed, everything works: jumping, attacking, silk skills, healing, map, inventory, pause. This is the part I trust least, because I step in before the game's own death code.
+- [ ] **Check this closely:** hitting the cocoon has no odd effect on the rescuer, such as a bounce or a wrong sound.
+
+**The boss**
+- [ ] When the owner goes down, the boss turns to the survivor right away and doesn't stand over the cocoon.
+- [ ] Killed while grabbed or during a multi-hit attack, such as Lace's: the hero still comes back normally when freed.
+
+**How it ends**
+- [ ] **Both down:** both get a normal death at once and respawn. Coming back waits for both again.
+- [ ] **Survivor wins:** the boss or last wave dies and your cocoon frees you by itself, with 2 masks. Try a boss with gates (`belltown_08`) and one without (`shellwood_22`).
+- [ ] **Survivor disconnects, or leaves the room during the fight:** you get a normal death instead of being stuck.
+- [ ] **Quit to the menu in a cocoon:** the other player's cocoon view goes away. Load back in and check your masks are fine.
+
+**Where the cocoon lands**
+- [ ] Killed in the air: it lies on the ground below.
+- [ ] Killed by spikes, lava or a pit: it appears at the game's safe spot in that room, and a teammate can reach it.
+- [ ] **Tell me about:** a cocoon nobody can reach. Arenas with floors that break (`bone_east_08`) are the likely place, because it doesn't move once it's placed. If that happens, the survivor has to die as well to end it.
+
+**Things that should stay normal deaths**
+- [ ] Dying anywhere outside a fight, with or without a teammate in the room.
+- [ ] Holding K at the fight gate.
+- [ ] Dying in a fight the gate doesn't hold (listed in section 3).
+- [ ] Dying in a memory room.
+
+**How the end of a fight is noticed:** the last boss-sized enemy dies, the arena's gate event fires, or the wave arena reports it's finished. If it misses the end, the survivor just has to hit the cocoon 3 times, but if they leave the room first you take a normal death despite the win. Send me the room if that happens.
+
+## 5. Arena details
+
+- [ ] **Joining late:** a player who reconnects during a wave arena and returns: the arena catches up to the current wave, dead enemies stay dead, the fight can still be finished, and the gates close behind them once they're in.
 - [ ] **The end:** both players get gates open, camera free and music back in `tut_03`, `bone_01`, `bone_18`, `dock_03c` and `ant_04_mid`.
 - [ ] **Boss arenas:** the boss and gates appear for both in `belltown_08`, `bellway_centipede_arena`, `bone_east_08`, `coral_11`, `greymoor_05_boss` / `greymoor_08_boss`, `room_crowcourt_02`, `shellwood_18`, `ward_02_boss`, `cog_dancers_boss`, `abyss_cocoon`.
 
-## 5. A dead owner doesn't freeze the boss
+## 6. A dead owner doesn't freeze the boss
 
-- [ ] During a boss fight, the owner dies while the other stays alive. Bosses to try: **Lace** (`bone_east_12`), **Seth** (`shellwood_22`), **Last Judge** (`coral_judge_arena`).
-  - Once the dead player has left the room, the boss should start fighting the survivor again.
-  - Before this fix it would pose over the dead hero forever, with the survivor shut in.
+With cocoons, this now only comes up in fights the gate doesn't hold, because a player in a cocoon stays in the room.
+
+- [ ] In a fight that isn't held (section 3), the owner dies and leaves the room while the other stays. The boss should start fighting the survivor again.
 - [ ] The reverse: the player who is **not** the owner dies. The boss should keep fighting the owner without pausing or changing target.
-- [ ] After that, the player who died can come back and rejoin the fight.
 
-## 6. Items and upgrades
+## 7. Items and upgrades
 
 - [ ] **Rosary string machine** (`bone_01c`, `dock_01`, `greymoor_01`): only the player who pays gets the string.
 - [ ] **Courier delivery** (Belltown): only the player who takes the delivery gets the fragile item and its bar.

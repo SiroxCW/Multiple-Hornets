@@ -727,7 +727,7 @@ internal static class EnemySync
     private static void CheckHandoffs()
     {
         var hero = HeroController.SilentInstance;
-        if (!hero || !_audience) return;
+        if (!hero || !_audience || World.Cocoon.IsDown) return;
 
         var heroPosition = hero.transform.position;
         var now = Time.realtimeSinceStartup;
@@ -759,13 +759,40 @@ internal static class EnemySync
         }
     }
 
+    /// <summary>Not only the active ones: a boss between two attacks can be switched off for a moment.</summary>
+    public static bool HasLivingBoss
+    {
+        get
+        {
+            foreach (var entity in Entities.Values)
+            {
+                if (entity.IsBossLike && entity.IsValid && !entity.Health.isDead) return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>Our hero is gone for now, but still in the room. Everything we own should fight somebody who can fight back.</summary>
+    public static void HandOffOwned(ushort newOwner)
+    {
+        var now = Time.realtimeSinceStartup;
+        foreach (var entity in Entities.Values)
+        {
+            if (entity.IsPuppet || !entity.IsValid || entity.Health.isDead) continue;
+
+            entity.LastOwnerChange = now;
+            SendTransfer(entity.Id, newOwner);
+        }
+    }
+
     private static ushort FindClosestPlayer(Entity entity, float range, float now)
     {
         ushort best = 0;
         var bestScore = float.MaxValue;
         foreach (var remote in PlayerSync.RemotePlayers)
         {
-            if (!remote || !remote.HasPosition) continue;
+            if (!remote || !remote.HasPosition || World.Cocoon.IsPlayerDown(remote.PlayerId)) continue;
 
             var distance = entity.DistanceTo(remote.transform.position);
             if (distance > range) continue;
@@ -790,7 +817,7 @@ internal static class EnemySync
         var bestDistance = ownDistance - CloserPlayerMargin;
         foreach (var remote in PlayerSync.RemotePlayers)
         {
-            if (!remote || !remote.HasPosition) continue;
+            if (!remote || !remote.HasPosition || World.Cocoon.IsPlayerDown(remote.PlayerId)) continue;
 
             var distance = entity.DistanceTo(remote.transform.position);
             if (distance > ClaimRange) continue;
@@ -901,7 +928,7 @@ internal static class EnemySync
     {
         // A dead hero is what makes bosses stop fighting, nobody else in the room should pay for that.
         var hero = HeroController.SilentInstance;
-        if (!hero || hero!.cState.dead) return;
+        if (!hero || hero!.cState.dead || World.Cocoon.IsDown) return;
 
         var heroPosition = hero.transform.position;
         var now = Time.realtimeSinceStartup;
