@@ -15,13 +15,18 @@ namespace MultipleHornetsMod.Sync.World;
 /// </summary>
 internal sealed class UpgradeDomain : IWorldDomain
 {
+    // While the game turns a full set of pieces into a whole mask, it can briefly have both. Counting that even for
+    // one poll would become sources that never go away and duplicates for everybody.
+    private const int PiecesPerMask = 4;
+    private const int PartsPerSpool = 2;
+
     private readonly UpgradeType[] _types =
     {
         new("mask", "found a mask shard",
-            pd => (pd.maxHealthBase - 5) * 4 + pd.heartPieces,
+            pd => (pd.maxHealthBase - 5) * 4 + pd.heartPieces % PiecesPerMask,
             GiveMaskShard),
         new("spool", "found a spool fragment",
-            pd => (pd.silkMax - 9) * 2 + pd.silkSpoolParts,
+            pd => (pd.silkMax - 9) * 2 + pd.silkSpoolParts % PartsPerSpool,
             GiveSpoolFragment),
         new("heart", "obtained a silk heart",
             pd => pd.silkRegenMax,
@@ -109,9 +114,9 @@ internal sealed class UpgradeDomain : IWorldDomain
     {
         var hero = HeroController.instance;
         pd.heartPieces++;
-        if (pd.heartPieces >= 4)
+        if (pd.heartPieces >= PiecesPerMask)
         {
-            pd.heartPieces -= 4;
+            pd.heartPieces -= PiecesPerMask;
             hero.AddToMaxHealth(1);
             hero.MaxHealth();
             EventRegister.SendEvent("MAX HP UP");
@@ -121,9 +126,9 @@ internal sealed class UpgradeDomain : IWorldDomain
     private static void GiveSpoolFragment(PlayerData pd)
     {
         pd.silkSpoolParts++;
-        if (pd.silkSpoolParts < 2) return;
+        if (pd.silkSpoolParts < PartsPerSpool) return;
 
-        pd.silkSpoolParts -= 2;
+        pd.silkSpoolParts -= PartsPerSpool;
         HeroController.instance.AddToMaxSilk(1);
         EventRegister.SendEvent("SPOOL MAX UP");
     }

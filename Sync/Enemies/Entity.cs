@@ -104,6 +104,10 @@ internal sealed class Entity
     private const float DeathCleanupTimeNoEffects = 15f;
     private const string MultiHitVariable = "Hero Event";
     private const string CatchingHeroVariable = "Catching Hero";
+    private const string HeroDeadEvent = "HORNET DEAD";
+    private const string HeroDefeatedEvent = "HORNET DEFEATED";
+    private const string HeroDeathEvent = "HORNET DEATH";
+    private const string HeroDeadVariable = "Hornet Dead";
 
     private readonly SnapshotInterpolator _interpolator = new();
     private RigidbodyType2D _storedBodyType;
@@ -245,6 +249,31 @@ internal sealed class Entity
         return false;
     }
 
+    /// <summary>
+    /// Bosses stop fighting for good when their hero dies and pose until the room reloads. That was the previous
+    /// owner's hero, and somebody else is still fighting: back to where the boss looks at its hero again.
+    /// </summary>
+    private FsmState? FindStateBeforeHeroDied(Fsm fsm)
+    {
+        var active = fsm.ActiveState;
+        var states = fsm.States;
+        if (active == null || states == null) return null;
+
+        foreach (var state in states)
+        {
+            foreach (var transition in state.Transitions)
+            {
+                if (transition.EventName is not (HeroDeadEvent or HeroDefeatedEvent or HeroDeathEvent)) continue;
+                if (string.IsNullOrEmpty(transition.ToState) || !active.Name.StartsWith(transition.ToState)) continue;
+
+                Log.Debug($"Enemy {Name} {fsm.Name} was done with its previous owner, back to {state.Name}");
+                return state;
+            }
+        }
+
+        return null;
+    }
+
     public void SetPuppet(bool puppet)
     {
         if (IsPuppet == puppet) return;
@@ -301,6 +330,13 @@ internal sealed class Entity
             return;
         }
 
+        // Remembered for a pose some attacks later. Whose hero died is what matters, and it was not ours.
+        foreach (var binding in Fsms)
+        {
+            var heroDead = binding.Fsm.Variables.FindFsmBool(HeroDeadVariable);
+            if (heroDead != null) heroDead.Value = false;
+        }
+
         // Waits and timers that finished while transitions were blocked would leave the FSM stuck forever,
         // restarting the current state lets the AI continue from where the previous owner was.
         var now = Time.realtimeSinceStartup;
@@ -311,7 +347,7 @@ internal sealed class Entity
             EnemySync.TakingOver = true;
             try
             {
-                EnemySync.ForceSwitchState(binding.Fsm, binding.Fsm.ActiveState);
+                EnemySync.ForceSwitchState(binding.Fsm, FindStateBeforeHeroDied(binding.Fsm) ?? binding.Fsm.ActiveState);
             }
             finally
             {

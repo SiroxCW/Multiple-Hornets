@@ -899,8 +899,9 @@ internal static class EnemySync
     /// </summary>
     private static void CheckClaims()
     {
+        // A dead hero is what makes bosses stop fighting, nobody else in the room should pay for that.
         var hero = HeroController.SilentInstance;
-        if (!hero) return;
+        if (!hero || hero!.cState.dead) return;
 
         var heroPosition = hero.transform.position;
         var now = Time.realtimeSinceStartup;
