@@ -37,6 +37,7 @@ internal static class FightGate
     private static float _followUpsUntil;
     private static bool _fightRunning;
     private static bool _sawBoss;
+    private static bool _sawBattle;
 
     public static void Init()
     {
@@ -53,24 +54,40 @@ internal static class FightGate
     /// </summary>
     public static bool IsFightRunning => _fightRunning || BattleSync.IsAnyRunning;
 
+    /// <summary>Memories are personal. Not all of them have it at the start of their name, some only the game knows about.</summary>
+    public static bool IsMemoryRoom
+    {
+        get
+        {
+            var gm = GameManager.SilentInstance;
+            return (gm && gm!.IsMemoryScene()) || GameState.CurrentScene.IndexOf("memory", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+    }
+
     public static void Update()
     {
         var scene = GameState.CurrentScene;
         if (scene != _scene)
         {
-            // The server forgets about us by itself when the room changes.
             _scene = scene;
             Started.Clear();
             _followUpsUntil = 0f;
             EndFight();
-            Drop();
+
+            // The server forgets about us by itself when the room changes. What was not sent yet can belong to the
+            // new room: a fight can start while its room is loading, before we get here.
+            if (_held is { Sent: true }) Drop();
         }
 
-        // Most boss arenas never send the gate event, what they do have is a boss that was alive and now is not.
+        // Most boss arenas never send the gate event, what they do have is a boss that was alive and now is not. Some
+        // controllers run a wave arena instead, or next to an enemy that is never meant to die.
         if (_fightRunning)
         {
             if (EnemySync.HasLivingBoss) _sawBoss = true;
             else if (_sawBoss) EndFight();
+
+            if (BattleSync.IsAnyRunning) _sawBattle = true;
+            else if (_sawBattle) EndFight();
         }
 
         if (_held != null) Hold();
@@ -94,6 +111,7 @@ internal static class FightGate
             {
                 _fightRunning = true;
                 _sawBoss = false;
+                _sawBattle = false;
                 TriggerSync.StartHeld(fsm, state);
             }, !RemoteHit.Active);
         }
@@ -124,8 +142,8 @@ internal static class FightGate
 
     private static bool MayStart(GameObject go, Action start, bool byLocalHero)
     {
-        // Memories are personal, and a puppet only does what the fight of its owner already does.
-        if (GameState.CurrentScene.StartsWith("Memory", StringComparison.OrdinalIgnoreCase) || EnemySync.PuppetActionOwner) return true;
+        // A puppet only does what the fight of its owner already does.
+        if (IsMemoryRoom || EnemySync.PuppetActionOwner) return true;
         if (!ScenePaths.TryGetPath(go, out var key) || Started.Contains(key)) return true;
 
         if (Session.Players.Count == 0 || Time.unscaledTime < _followUpsUntil)
@@ -136,16 +154,30 @@ internal static class FightGate
             return true;
         }
 
-        if (!byLocalHero || _held != null) return false;
+        if (!byLocalHero) return false;
 
-        Log.Debug($"Fight {key} waits for the others");
-        _held = new HeldStart(key, start);
-        SendKey(Msg.FightReady, key);
+        // Whatever else starts during the wait: the event that got us here will not come a second time.
+        if (_held != null)
+        {
+            _held.Add(key, start);
+            return false;
+        }
+
+        _held = new HeldStart(go, key, start);
         return false;
     }
 
     private static void Hold()
     {
+        var held = _held!;
+
+        // Its room is gone, we did not get there after all.
+        if (!held.Source)
+        {
+            Cancel();
+            return;
+        }
+
         var hero = HeroController.SilentInstance;
         if (!hero) return;
 
@@ -155,8 +187,25 @@ internal static class FightGate
             return;
         }
 
+        var inPosition = hero.isHeroInPosition && !hero.cState.transitioning;
+
+        // Only now, the server still has us in the last room while this one loads and would forget about us right away.
+        if (!held.Sent && inPosition)
+        {
+            if (IsMemoryRoom || Session.Players.Count == 0)
+            {
+                Drop();
+                Run(held);
+                return;
+            }
+
+            Log.Debug($"Fight {held.Key} waits for the others");
+            held.Sent = true;
+            SendKey(Msg.FightReady, held.Key);
+        }
+
         // Not while walking in through a door, and a conversation or a stagger has control already. It comes back later.
-        if (!_tookControl && hero.acceptingInput && hero.isHeroInPosition && !hero.cState.transitioning) TakeControl(hero);
+        if (!_tookControl && hero.acceptingInput && inPosition) TakeControl(hero);
 
         if (_tookControl)
         {
@@ -193,6 +242,7 @@ internal static class FightGate
     {
         _fightRunning = false;
         _sawBoss = false;
+        _sawBattle = false;
     }
 
     private static void Cancel()
@@ -217,13 +267,21 @@ internal static class FightGate
 
     private static void Run(HeldStart held)
     {
-        try
+        foreach (var start in held.Starts)
         {
-            held.Start();
-        }
-        catch (Exception e)
-        {
-            Log.Exception("FightGate.Run", e);
+            Started.Add(start.Key);
+
+            // The server only heard of the first one, somebody coming back has to get in through the others too.
+            if (start.Key != held.Key && Session.IsConnected) SendKey(Msg.FightStarted, start.Key);
+
+            try
+            {
+                start.Run();
+            }
+            catch (Exception e)
+            {
+                Log.Exception("FightGate.Run", e);
+            }
         }
     }
 
@@ -267,6 +325,7 @@ internal static class FightGate
         Drop();
         Started.Clear();
         Waiting.Clear();
+        EndFight();
         if (held != null) Run(held);
     }
 
@@ -305,14 +364,35 @@ internal static class FightGate
 
     private sealed class HeldStart
     {
-        public HeldStart(string key, Action start)
+        public HeldStart(GameObject source, string key, Action run)
+        {
+            Source = source;
+            Key = key;
+            Starts.Add(new Start(key, run));
+        }
+
+        public GameObject Source { get; }
+        public string Key { get; }
+        public bool Sent { get; set; }
+        public List<Start> Starts { get; } = new();
+
+        /// <summary>A sensor keeps firing while the hero stands in it.</summary>
+        public void Add(string key, Action run)
+        {
+            if (Starts.All(start => start.Key != key)) Starts.Add(new Start(key, run));
+        }
+    }
+
+    private readonly struct Start
+    {
+        public Start(string key, Action run)
         {
             Key = key;
-            Start = start;
+            Run = run;
         }
 
         public string Key { get; }
-        public Action Start { get; }
+        public Action Run { get; }
     }
 }
 

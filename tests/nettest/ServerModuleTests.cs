@@ -573,6 +573,13 @@ internal static class ServerModuleTests
         Pump();
         check(Released(a, "R2:Boss") && Released(b, "R2:Boss"), "the last one arriving after a room change releases too");
 
+        const string realKey = "Bone_05_boss:Boss Scene#0/Thick Silk Vines Beast (1)#0";
+        Clear();
+        Key(a, Msg.FightReady, realKey);
+        Key(b, Msg.FightReady, realKey);
+        Pump();
+        check(Released(a, realKey) && Released(b, realKey), "the path of a real object comes back unchanged");
+
         a.EnterScene("R4");
         b.EnterScene("R5");
         Pump();

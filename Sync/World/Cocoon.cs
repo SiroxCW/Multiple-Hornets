@@ -96,7 +96,7 @@ internal static class Cocoon
     /// <summary>Whether this death ends in a cocoon. Called by the game's own death, before anything of it happened.</summary>
     public static bool TryGoDown(HeroController hero, bool nonLethal)
     {
-        if (_allowDeath || _down || nonLethal || !Session.IsConnected || !FightGate.IsFightRunning) return false;
+        if (_allowDeath || _down || nonLethal || !Session.IsConnected || !FightGate.IsFightRunning || FightGate.IsMemoryRoom) return false;
 
         var scene = GameState.CurrentScene;
         if (!Session.Players.Values.Any(player => player.Scene == scene)) return false;
@@ -417,7 +417,8 @@ internal sealed class CocoonView : MonoBehaviour, IHitResponder
 
     public IHitResponder.HitResponse Hit(HitInstance damageInstance)
     {
-        if (!_hittable || !damageInstance.IsHeroDamage) return IHitResponder.Response.None;
+        // Hits on objects get replayed for everybody else, but only the one who hit it counts.
+        if (!_hittable || !damageInstance.IsHeroDamage || RemoteHit.Active) return IHitResponder.Response.None;
 
         var now = Time.unscaledTime;
         if (now < _cooldownUntil) return IHitResponder.Response.Invincible;

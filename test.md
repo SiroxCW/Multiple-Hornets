@@ -49,15 +49,16 @@ Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_
 - [ ] **Both go down:** the room empties. Coming back waits for both again.
 - [ ] **Different rooms:** each player freezes at a different fight. Nothing starts until one of them gives up. This is on purpose, each sees where the other is.
 - [ ] **Double touch:** both step in at the same moment. The fight starts once and ends normally.
-- [ ] **Web hit (`bone_05_boss`):** one player hits the web and freezes. The other sees the web still there and has to hit it too.
+- [ ] **Web (`bone_05_boss`):** one player breaks the web and freezes. The other sees the web still there and has to break it the same way.
+- [ ] **Start while the room loads (`belltown_shrine` after meeting Widow, `abyss_cocoon`):** the fight starts as you walk in. You freeze after arriving, and the fight still starts once both are there.
 - [ ] **Dialogue first (Seth, Lace, Widow in `belltown_shrine`):** the freeze comes when the conversation would start or end. Control has to come back afterwards, without anybody stuck in a text box. **Check this closely**, these are the ones I trust least.
 - [ ] **Fight with several parts (`belltown_08`, `coral_11`, `bone_east_08`):** there should be one freeze only, not a second one partway through. If you see a second one, tell me the room.
 
 **Things that should not freeze**
 - [ ] Alone in a session (nobody else connected): no freeze, no text.
 - [ ] A teammate on the main menu: no real wait, at most a tiny hitch.
-- [ ] Memory rooms (`Memory_*`): no freeze.
-- [ ] Silk vines blocking the path in `mosstown_02`, ordinary enemies, and rooms with no fight.
+- [ ] Memory rooms (`Memory_*`, `Shellwood_11b_Memory`): no freeze and no cocoon.
+- [ ] Silk vines blocking the path in `mosstown_02`, ordinary enemies being woken (`hang_14`, `song_15`, `weave_02`), and rooms with no fight.
 
 **Worth knowing**
 - A teammate can still walk around while you are frozen, and can hit a sleeping boss before starting the fight. Tell me if this turns out to be a problem.

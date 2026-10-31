@@ -93,7 +93,19 @@ internal static class BattleSync
 
     public static bool IsRunning(BattleScene battle) => Running.ContainsKey(battle);
 
-    public static bool IsAnyRunning => Running.Count > 0;
+    /// <summary>A battle that ended normally stays in the list, the game only marks it as completed.</summary>
+    public static bool IsAnyRunning
+    {
+        get
+        {
+            foreach (var battle in Running.Keys)
+            {
+                if (battle && !battle.completed) return true;
+            }
+
+            return false;
+        }
+    }
 
     /// <summary>
     /// A teammate finishing the battle can reach us before the last death does. The game then ends it as if it had

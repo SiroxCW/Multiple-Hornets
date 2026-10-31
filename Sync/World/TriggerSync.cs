@@ -59,7 +59,8 @@ internal static class TriggerSync
 
         // What starts a boss arena when the hero walks in. Bosses come out of these, without this they stay hidden or
         // asleep for everybody but the one who walked in. Whoever is elsewhere in the room follows when they get
-        // there, the gates would lock them out otherwise. FightGate holds all of these until everybody is there.
+        // there, the gates would lock them out otherwise. FightGate holds these until everybody is there, except
+        // where they only wake up ordinary enemies.
         new(new[] { "boss scene" },
             new[]
             {
@@ -77,11 +78,11 @@ internal static class TriggerSync
         new(new[] { "wake scene" }, new[] { "Idle" }, new[] { "Transition to Silent", "State" }, arena: true),
         new(new[] { "dancer control" }, new[] { "Dormant" }, new[] { "Gate Close" }, arena: true),
         new(new[] { "vampire gnat scene" }, new[] { "Idle" }, new[] { "Enter" }, arena: true),
-        new(new[] { "wake range" }, new[] { "Idle" }, new[] { "Wake" }, arena: true),
+        new(new[] { "wake range" }, new[] { "Idle" }, new[] { "Wake" }, arena: true, fight: false),
         new(new[] { "door closer" }, new[] { "State 1" }, new[] { "State 2" }, arena: true),
         new(new[] { "battle start" }, new[] { "Idle" }, new[] { "Enter" }, arena: true),
-        new(new[] { "song pilgrim scene" }, new[] { "Unwoken" }, new[] { "Wake" }, arena: true),
-        new(new[] { "initial servitor scene" }, new[] { "Idle" }, new[] { "Send" }, arena: true),
+        new(new[] { "song pilgrim scene" }, new[] { "Unwoken" }, new[] { "Wake" }, arena: true, fight: false),
+        new(new[] { "initial servitor scene" }, new[] { "Idle" }, new[] { "Send" }, arena: true, fight: false),
         new(new[] { "intro control" }, new[] { "Idle", "Encountered" }, new[] { "Scene Setup", "Lace Re-emerge" }, arena: true),
         new(new[] { "steel servant scene" }, new[] { "Idle" }, new[] { "Capture" }, arena: true),
 
@@ -103,7 +104,7 @@ internal static class TriggerSync
     /// <summary>This runs for every state of every FSM in the game, the state name rules nearly all of them out.</summary>
     private static readonly HashSet<string> WatchedStates = new(Rules.SelectMany(rule => rule.To));
 
-    private static readonly HashSet<string> ArenaStates = new(Rules.Where(rule => rule.Arena).SelectMany(rule => rule.To));
+    private static readonly HashSet<string> ArenaStates = new(Rules.Where(rule => rule.Fight).SelectMany(rule => rule.To));
 
     private static readonly List<WaitingStart> Waiting = new();
     private static string _waitingScene = "";
@@ -155,7 +156,7 @@ internal static class TriggerSync
         if (!go || active == null) return false;
 
         var rule = FindRule(go.name);
-        return rule is { Arena: true } && rule.To.Contains(stateName) && rule.From.Contains(active.Name);
+        return rule is { Fight: true } && rule.To.Contains(stateName) && rule.From.Contains(active.Name);
     }
 
     /// <summary>Everybody was held back and starts at once, nobody needs to hear it from us. An owner moves a puppet.</summary>
@@ -376,8 +377,9 @@ internal static class TriggerSync
 
     private sealed class Rule
     {
-        public Rule(string[] names, string[] from, string[] to, bool collectedByOne = false, bool arena = false)
+        public Rule(string[] names, string[] from, string[] to, bool collectedByOne = false, bool arena = false, bool fight = true)
         {
+            Fight = arena && fight;
             Names = names;
             From = from;
             To = to;
@@ -399,6 +401,9 @@ internal static class TriggerSync
 
         /// <summary>It closes something around the room, the others follow once they are there.</summary>
         public bool Arena { get; }
+
+        /// <summary>It starts a boss or an arena, nobody gets to do that alone.</summary>
+        public bool Fight { get; }
     }
 
     private readonly struct WaitingStart
