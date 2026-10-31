@@ -45,7 +45,7 @@ internal static class FsmDoTransitionPatch
             return false;
         }
 
-        if (!EnemySync.IsPuppetFsm(__instance)) return true;
+        if (!EnemySync.IsPuppetFsm(__instance) || EnemySync.IsStartingUp(__instance)) return true;
 
         __result = false;
         try

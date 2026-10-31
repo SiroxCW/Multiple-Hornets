@@ -282,9 +282,15 @@ internal static class EnemySync
         binding.Entity.LastInterest = now;
     }
 
+    public static bool IsStartingUp(Fsm fsm) => FsmBindings.TryGetValue(fsm, out var binding) && binding.IsStartingUp;
+
     public static void OnFsmEnterState(Fsm fsm, FsmState state)
     {
-        if (!_audience || FsmBindings.Count == 0 || !FsmBindings.TryGetValue(fsm, out var binding) || binding.Entity.IsPuppet) return;
+        if (FsmBindings.Count == 0 || !FsmBindings.TryGetValue(fsm, out var binding)) return;
+
+        if (!_forcingState && state.Name == fsm.StartState) binding.StartFrame = Time.frameCount;
+
+        if (!_audience || binding.Entity.IsPuppet) return;
 
         var index = binding.IndexOf(state);
         if (index < 0) return;
@@ -388,6 +394,7 @@ internal static class EnemySync
     public static void ForceSwitchState(Fsm fsm, FsmState state)
     {
         FsmExecutionStack.PushFsm(fsm);
+        _forcingState = true;
         try
         {
             fsm.SwitchState(state);
@@ -398,9 +405,12 @@ internal static class EnemySync
         }
         finally
         {
+            _forcingState = false;
             FsmExecutionStack.PopFsm();
         }
     }
+
+    private static bool _forcingState;
 
     // ---- Room and ownership -----------------------------------------------------------------------------------
 
@@ -580,7 +590,11 @@ internal static class EnemySync
         Entities[id] = entity;
         ByHealth[health] = entity;
         for (var i = 0; i < entity.Animators.Count && i < 255; i++) ByAnimator[entity.Animators[i]] = (entity, i);
-        foreach (var binding in entity.Fsms) FsmBindings[binding.Fsm] = binding;
+        foreach (var binding in entity.Fsms)
+        {
+            FsmBindings[binding.Fsm] = binding;
+            if (binding.Fsm.ActiveStateName == binding.Fsm.StartState) binding.StartFrame = Time.frameCount;
+        }
 
         if (!IsLocalOwner(id)) entity.SetPuppet(true);
 

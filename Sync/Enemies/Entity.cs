@@ -36,6 +36,18 @@ internal sealed class FsmBinding
     public bool IsRunning => Component && Component.enabled && Component.gameObject.activeInHierarchy && Fsm.Started &&
                              Fsm.ActiveState != null;
 
+    /// <summary>The frame this FSM entered its first state.</summary>
+    public int StartFrame { get; set; } = -1000;
+
+    /// <summary>
+    /// Setup often waits a frame before it runs, and it is what makes an enemy hidden, untouchable and able to die.
+    /// A puppet has to get through it too, the owner's state only takes over after that.
+    /// </summary>
+    public bool IsStartingUp => Time.frameCount - StartFrame <= StartupFrames;
+
+    /// <summary>The longest wait before setup is two frames, in all enemies of the game.</summary>
+    private const int StartupFrames = 3;
+
     public int IndexOf(FsmState state) => state != null && _stateIndices.TryGetValue(state, out var index) ? index : -1;
 
     public int ActiveStateIndex => IndexOf(Fsm.ActiveState);
@@ -392,7 +404,7 @@ internal sealed class Entity
         var states = binding.Fsm.States;
         if (states == null || stateIndex < 0 || stateIndex >= states.Length) return;
 
-        if (!binding.IsRunning)
+        if (!binding.IsRunning || binding.IsStartingUp)
         {
             binding.DesiredState = stateIndex;
             return;
