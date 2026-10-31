@@ -14,15 +14,19 @@ namespace MultipleHornetsMod.Sync.World;
 /// <list type="bullet">
 /// <item>A world pickup is tied to that pickup, so it is shared once and late joiners get it too.</item>
 /// <item>A unique item is shared once.</item>
-/// <item>Enemy drops and repeatable shop purchases stay personal, everyone gets their own.</item>
+/// <item>Enemy drops, repeatable purchases and courier deliveries stay personal, everyone gets their own.</item>
 /// <item>Anything else (NPC gifts, wish rewards) is shared live.</item>
 /// </list>
 /// </summary>
 internal static class GiftSync
 {
+    /// <summary>Turns rosaries into strings of them whenever somebody pays for it, a gift would be free money.</summary>
+    private const string RosaryMachine = "rosary_string_machine";
+
     private static readonly HashSet<string> Handled = new();
     private static CollectableItemPickup? _pickup;
     private static PersistentBoolItem? _fsmSource;
+    private static bool _paidForByCollector;
     private static ShopItem? _shop;
     private static bool _catchUp;
     private static int _counter;
@@ -44,9 +48,17 @@ internal static class GiftSync
 
     public static void OnPickupEnd() => _pickup = null;
 
-    public static void OnFsmCollectStart(Fsm fsm) => _fsmSource = BerrySync.FindSource(fsm);
+    public static void OnFsmCollectStart(Fsm fsm)
+    {
+        _fsmSource = BerrySync.FindSource(fsm);
+        _paidForByCollector = fsm.GameObject && fsm.GameObject.name.Contains(RosaryMachine);
+    }
 
-    public static void OnFsmCollectEnd() => _fsmSource = null;
+    public static void OnFsmCollectEnd()
+    {
+        _fsmSource = null;
+        _paidForByCollector = false;
+    }
 
     public static void OnShopStart(ShopItem shop)
     {
@@ -81,6 +93,9 @@ internal static class GiftSync
 
     private static string? GiftKey(CollectableItem item)
     {
+        // A delivery belongs to the wish of whoever carries it, and those stay personal too.
+        if (_paidForByCollector || item is DeliveryQuestItem) return null;
+
         if (_fsmSource) return PersistentKey(_fsmSource!);
 
         if (_pickup)
