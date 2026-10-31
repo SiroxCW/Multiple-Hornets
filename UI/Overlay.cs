@@ -98,6 +98,7 @@ internal sealed class Overlay : MonoBehaviour
 
         if (ModConfig.ShowNames) DrawNameTags(scale);
         DrawStatus(width);
+        DrawFightNotice(width);
         DrawChat();
         if (_menuOpen) DrawMenu(width);
     }
@@ -160,6 +161,21 @@ internal sealed class Overlay : MonoBehaviour
             var rect = new Rect(x - 150f, y - 30f, 300f, 30f);
             DrawShadowedLabel(rect, remote.PlayerName, _styles!.NameTag, Color.white);
         }
+    }
+
+    private void DrawFightNotice(float width)
+    {
+        if (!FightGate.TryGetNotice(out var title, out var detail)) return;
+
+        var styles = _styles!;
+        var y = 170f;
+        if (title.Length > 0)
+        {
+            DrawShadowedLabel(new Rect(0f, y, width, 48f), title, styles.NoticeTitle, Color.white);
+            y += 50f;
+        }
+
+        DrawShadowedLabel(new Rect(0f, y, width, 90f), detail, styles.NoticeDetail, Color.white);
     }
 
     private void DrawStatus(float width)
@@ -548,6 +564,10 @@ internal sealed class Overlay : MonoBehaviour
             Status.normal.textColor = Color.white;
             NameTag = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.LowerCenter };
             NameTag.normal.textColor = Color.white;
+            NoticeTitle = new GUIStyle(GUI.skin.label) { fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.UpperCenter };
+            NoticeTitle.normal.textColor = Color.white;
+            NoticeDetail = new GUIStyle(GUI.skin.label) { fontSize = 22, alignment = TextAnchor.UpperCenter };
+            NoticeDetail.normal.textColor = Color.white;
         }
 
         public GUIStyle Panel { get; }
@@ -562,5 +582,7 @@ internal sealed class Overlay : MonoBehaviour
         public GUIStyle Chat { get; }
         public GUIStyle Status { get; }
         public GUIStyle NameTag { get; }
+        public GUIStyle NoticeTitle { get; }
+        public GUIStyle NoticeDetail { get; }
     }
 }

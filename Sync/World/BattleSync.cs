@@ -91,6 +91,8 @@ internal static class BattleSync
 
     public static bool MayLock(BattleScene battle) => !Waiting.ContainsKey(battle);
 
+    public static bool IsRunning(BattleScene battle) => Running.ContainsKey(battle);
+
     /// <summary>
     /// A teammate finishing the battle can reach us before the last death does. The game then ends it as if it had
     /// been finished long ago, which does not undo what only the end of a running battle undoes.

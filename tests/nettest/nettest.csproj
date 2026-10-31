@@ -23,6 +23,7 @@
     <Compile Include="../../Core/DataPaths.cs" />
     <Compile Include="../../Sync/World/WorldTypes.cs" />
     <Compile Include="../../Sync/World/WorldServer.cs" />
+    <Compile Include="../../Sync/World/FightGateServer.cs" />
     <Compile Include="../../Sync/Enemies/EntityServer.cs" />
     <Compile Include="../../Game/Session.cs" />
     <Compile Include="../../Game/Players/CloakPixels.cs" />

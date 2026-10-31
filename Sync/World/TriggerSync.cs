@@ -43,8 +43,9 @@ internal static class TriggerSync
 
         // A boss waiting in a web or returning to its arena: without this, one player has the arena and the others
         // still see the web, next to the real boss that follows the owner.
+        new(new[] { "thick silk vines beast" }, new[] { "Idle" }, new[] { "Destroy" }, arena: true),
         new(new[] { "thick silk vines" }, new[] { "Idle" }, new[] { "Destroy" }),
-        new(new[] { "return battle" }, new[] { "Idle" }, new[] { "Scene Setup" }),
+        new(new[] { "return battle" }, new[] { "Idle" }, new[] { "Scene Setup" }, arena: true),
 
         // One silk heart for everybody, it takes its collector into a memory and only counts when that ends.
         new(new[] { "silk heart" },
@@ -58,10 +59,18 @@ internal static class TriggerSync
 
         // What starts a boss arena when the hero walks in. Bosses come out of these, without this they stay hidden or
         // asleep for everybody but the one who walked in. Whoever is elsewhere in the room follows when they get
-        // there, the gates would lock them out otherwise.
+        // there, the gates would lock them out otherwise. FightGate holds all of these until everybody is there.
         new(new[] { "boss scene" },
-            new[] { "Idle", "Ready", "Restart Ready", "Solo Ready", "Meet Ready", "Remeet Ready", "Start Tension" },
-            new[] { "Arena Start", "Waiting For Pos", "Wake", "Remeet 1", "Gate Sfx", "Enter", "Battle Start" },
+            new[]
+            {
+                "Idle", "Ready", "Restart Ready", "Solo Ready", "Meet Ready", "Remeet Ready", "Start Tension", "Battle Ready",
+                "Wait until Hero In Arena", "Early Start Range", "Encountered", "In Range", "Speak Ready", "Init",
+            },
+            new[]
+            {
+                "Arena Start", "Waiting For Pos", "Wake", "Remeet 1", "Gate Sfx", "Enter", "Battle Start", "Start",
+                "Start Refight", "Needolin Scene", "Spinner Tele Out", "Spinner Look",
+            },
             arena: true),
         new(new[] { "wisp pyre effigy" }, new[] { "Dormant", "Set HP", "Close Gates" }, new[] { "Close Gates", "Intro" }, arena: true),
         new(new[] { "centipede control" }, new[] { "Dormant" }, new[] { "Set HP" }, arena: true),
@@ -73,11 +82,28 @@ internal static class TriggerSync
         new(new[] { "battle start" }, new[] { "Idle" }, new[] { "Enter" }, arena: true),
         new(new[] { "song pilgrim scene" }, new[] { "Unwoken" }, new[] { "Wake" }, arena: true),
         new(new[] { "initial servitor scene" }, new[] { "Idle" }, new[] { "Send" }, arena: true),
-        new(new[] { "intro control" }, new[] { "Idle" }, new[] { "Scene Setup" }, arena: true),
+        new(new[] { "intro control" }, new[] { "Idle", "Encountered" }, new[] { "Scene Setup", "Lace Re-emerge" }, arena: true),
+        new(new[] { "steel servant scene" }, new[] { "Idle" }, new[] { "Capture" }, arena: true),
+
+        // Bosses that wake up by themselves. They are enemies with an owner, so this only holds them back.
+        new(new[] { "lace boss1" }, new[] { "Dormant", "Dormant Blocked Idle", "Dormant Block" }, new[] { "Scene Start", "Location Check 2" }, arena: true),
+        new(new[] { "lace boss2 new" }, new[] { "Start Battle Wait" }, new[] { "Start Battle", "Refight Wake" }, arena: true),
+        new(new[] { "seth" }, new[] { "Dormant", "Rest Idle", "Accept" }, new[] { "Take Control", "Wake Antic", "Roar Antic 2" }, arena: true),
+        new(new[] { "cloverstag white boss" }, new[] { "Rest" }, new[] { "Roar Antic" }, arena: true),
+        new(new[] { "garmond black threaded fighter" }, new[] { "Dormant" }, new[] { "Roar Antic" }, arena: true),
+        new(new[] { "blue assistant" }, new[] { "Rest" }, new[] { "Wake" }, arena: true),
+        new(new[] { "coral warrior grey" }, new[] { "Sleep" }, new[] { "Wake Antic" }, arena: true),
+        new(new[] { "tormented trobbio" }, new[] { "Wait" }, new[] { "State" }, arena: true),
+        new(new[] { "trobbio" }, new[] { "Wait", "Wait Refight" }, new[] { "Take Control", "Start Pause" }, arena: true),
+        new(new[] { "skull king" }, new[] { "State Check", "In Roof" }, new[] { "Wake Antic", "Rewake Pause" }, arena: true),
+        new(new[] { "pinstress boss" }, new[] { "Dormant" }, new[] { "Intro Antic" }, arena: true),
+        new(new[] { "first weaver" }, new[] { "Dormant" }, new[] { "Refight Appear", "Intro Wave" }, arena: true),
     };
 
     /// <summary>This runs for every state of every FSM in the game, the state name rules nearly all of them out.</summary>
     private static readonly HashSet<string> WatchedStates = new(Rules.SelectMany(rule => rule.To));
+
+    private static readonly HashSet<string> ArenaStates = new(Rules.Where(rule => rule.Arena).SelectMany(rule => rule.To));
 
     private static readonly List<WaitingStart> Waiting = new();
     private static string _waitingScene = "";
@@ -117,6 +143,38 @@ internal static class TriggerSync
 
         Vector2 from = hero!.transform.position;
         return Vector2.Distance(from, position) <= ReachRange && !Physics2D.Linecast(from, position, TerrainMask);
+    }
+
+    /// <summary>Whether going to this state means a fight starts now.</summary>
+    public static bool IsArenaStart(Fsm fsm, string stateName)
+    {
+        if (!ArenaStates.Contains(stateName)) return false;
+
+        var go = fsm.GameObject;
+        var active = fsm.ActiveState;
+        if (!go || active == null) return false;
+
+        var rule = FindRule(go.name);
+        return rule is { Arena: true } && rule.To.Contains(stateName) && rule.From.Contains(active.Name);
+    }
+
+    /// <summary>Everybody was held back and starts at once, nobody needs to hear it from us. An owner moves a puppet.</summary>
+    public static void StartHeld(Fsm fsm, string stateName)
+    {
+        if (EnemySync.IsPuppetFsm(fsm) || !IsArenaStart(fsm, stateName)) return;
+
+        var state = fsm.GetState(stateName);
+        if (state == null) return;
+
+        _applying = true;
+        try
+        {
+            EnemySync.ForceSwitchState(fsm, state);
+        }
+        finally
+        {
+            _applying = false;
+        }
     }
 
     public static void OnFsmEnterState(Fsm fsm, FsmState state)
@@ -204,6 +262,9 @@ internal static class TriggerSync
 
             var fsm = component.Fsm;
             var active = fsm.ActiveState;
+
+            // Its owner moves it.
+            if (EnemySync.IsPuppetFsm(fsm)) return;
 
             // Already running here too, somebody else or we were first.
             if (active == null || !rule.From.Contains(active.Name)) return;

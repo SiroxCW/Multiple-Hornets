@@ -17,6 +17,7 @@ internal static class ModConfig
     private static ConfigEntry<int> _maxPlayers = null!;
     private static ConfigEntry<KeyCode> _menuKey = null!;
     private static ConfigEntry<KeyCode> _chatKey = null!;
+    private static ConfigEntry<KeyCode> _giveUpKey = null!;
     private static ConfigEntry<bool> _showNames = null!;
     private static ConfigEntry<string> _cloakColor = null!;
     private static ConfigEntry<bool> _debugLogging = null!;
@@ -26,6 +27,7 @@ internal static class ModConfig
         _username = config.Bind("General", "Username", "Hornet", "Name shown to other players.");
         _menuKey = config.Bind("Keys", "MultiplayerMenu", KeyCode.F5, "Opens the Multiple Hornets menu.");
         _chatKey = config.Bind("Keys", "Chat", KeyCode.Y, "Opens the chat input while connected.");
+        _giveUpKey = config.Bind("Keys", "GiveUp", KeyCode.K, "Hold while waiting for other players at a fight to kill your hero and leave.");
         _showNames = config.Bind("Display", "ShowNames", true, "Show names above other players.");
         _cloakColor = config.Bind("Display", "CloakColor", "", "Color of your cloak as RRGGBB, for example 3060E0. Empty keeps the color of the game.");
 
@@ -74,6 +76,7 @@ internal static class ModConfig
 
     public static KeyCode MenuKey => _menuKey.Value;
     public static KeyCode ChatKey => _chatKey.Value;
+    public static KeyCode GiveUpKey => _giveUpKey.Value;
 
     public static string CloakColor
     {

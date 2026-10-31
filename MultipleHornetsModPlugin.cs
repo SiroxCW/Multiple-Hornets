@@ -30,6 +30,8 @@ public partial class MultipleHornetsModPlugin : BaseUnityPlugin
         HitSync.Init();
         TriggerSync.Init();
         BattleSync.Init();
+        FightGateServer.Init();
+        FightGate.Init();
         EntityServer.Init();
         EnemySync.Init();
 
@@ -62,6 +64,7 @@ internal sealed class Runner : MonoBehaviour
             WorldServer.Current?.Update();
             TriggerSync.Update();
             BattleSync.Update();
+            FightGate.Update();
             EnemySync.Update();
         }
         catch (Exception e)

@@ -39,6 +39,12 @@ internal static class FsmDoTransitionPatch
 {
     private static bool Prefix(Fsm __instance, FsmTransition transition, ref bool __result)
     {
+        if (World.FightGate.HoldsBack(__instance, transition))
+        {
+            __result = false;
+            return false;
+        }
+
         if (!EnemySync.IsPuppetFsm(__instance)) return true;
 
         __result = false;

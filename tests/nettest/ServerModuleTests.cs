@@ -336,5 +336,145 @@ internal static class ServerModuleTests
 
         server.Stop();
         try { Directory.Delete(dir, true); } catch { }
+
+        RunFightGate(check);
+    }
+
+    private static void RunFightGate(Action<bool, string> check)
+    {
+        const int port = 27022;
+        var server = new GameServer();
+        server.Start(port, "", 8, out _);
+        _ = new FightGateServer(server);
+
+        var a = new ModuleClient("A");
+        var b = new ModuleClient("B");
+        var clients = new List<ModuleClient> { a, b };
+        foreach (var client in clients)
+        {
+            client.Client.Register(Msg.FightRelease, r => client.Events.Add($"release {r.GetString()}"));
+            client.Client.Register(Msg.FightStatus, r =>
+            {
+                var waiting = new List<string>();
+                var count = r.GetUShort();
+                for (var i = 0; i < count; i++)
+                {
+                    waiting.Add($"{r.GetUShort()}@{r.GetString()}");
+                }
+
+                client.Events.Add($"status {string.Join(",", waiting)}");
+            });
+        }
+
+        void Pump(int ms = 150)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < ms)
+            {
+                server.Poll();
+                foreach (var c in clients) c.Client.Poll();
+                System.Threading.Thread.Sleep(5);
+            }
+        }
+
+        void Key(ModuleClient c, Msg type, string key) => c.Send(type, Protocol.ChannelControl, w => w.Put(key));
+        void Clear() { foreach (var c in clients) c.Events.Clear(); }
+        bool Released(ModuleClient c, string key) => c.Events.Contains($"release {key}");
+        bool AnyRelease(ModuleClient c) => c.Events.Any(e => e.StartsWith("release"));
+
+        a.Connect(port);
+        b.Connect(port);
+        Pump(400);
+
+        a.EnterScene("R1");
+        Pump();
+        Key(a, Msg.FightReady, "R1:Boss");
+        Pump();
+        check(Released(a, "R1:Boss"), "somebody on the main menu is not waited for");
+
+        b.EnterScene("R1");
+        Pump();
+        Clear();
+        Key(b, Msg.FightReady, "R1:Boss");
+        Pump();
+        check(Released(b, "R1:Boss"), "joining a fight that runs needs nobody else");
+
+        a.EnterScene("R2");
+        b.EnterScene("R2");
+        Pump();
+        a.EnterScene("R1");
+        b.EnterScene("R1");
+        Pump();
+        Clear();
+        Key(a, Msg.FightReady, "R1:Boss");
+        Pump();
+        check(!AnyRelease(a), "an empty room starts over, the fight waits again");
+        check(b.Events.Contains($"status {a.Id}@R1"), "the other player hears who waits where");
+
+        Key(b, Msg.FightReady, "R1:Boss");
+        Pump();
+        check(Released(a, "R1:Boss") && Released(b, "R1:Boss"), "the last player arriving releases everybody");
+        check(b.Events.Last() == "status ", "nobody is waiting after the release");
+
+        b.EnterScene("R2");
+        Pump();
+        b.EnterScene("R1");
+        Pump();
+        Clear();
+        Key(b, Msg.FightReady, "R1:Boss");
+        Pump();
+        check(Released(b, "R1:Boss") && !AnyRelease(a), "coming back to a running fight only lets you in");
+
+        Clear();
+        Key(a, Msg.FightStarted, "R1:Second");
+        Pump();
+        Key(b, Msg.FightReady, "R1:Second");
+        Pump();
+        check(Released(b, "R1:Second"), "what started without waiting counts as running");
+
+        Clear();
+        Key(a, Msg.FightReady, "R1:Cancelled");
+        Pump();
+        Key(a, Msg.FightCancel, "");
+        Pump();
+        Key(b, Msg.FightReady, "R1:Cancelled");
+        Pump();
+        check(!AnyRelease(a) && !AnyRelease(b), "giving up takes you off the list");
+        check(b.Events.Last() == $"status {b.Id}@R1", "the other player hears that you gave up");
+
+        Clear();
+        Key(a, Msg.FightReady, "R1:Other");
+        Pump();
+        check(Released(a, "R1:Other") && Released(b, "R1:Cancelled"), "different starts in one room release together");
+
+        a.EnterScene("R2");
+        b.EnterScene("R3");
+        Pump();
+        Clear();
+        Key(a, Msg.FightReady, "R2:Boss");
+        Key(b, Msg.FightReady, "R3:Boss");
+        Pump();
+        check(!AnyRelease(a) && !AnyRelease(b), "waiting in different rooms starts nothing");
+
+        b.EnterScene("R2");
+        Pump();
+        check(!AnyRelease(a) && !AnyRelease(b), "leaving the room takes you off the list");
+
+        Key(b, Msg.FightReady, "R2:Boss");
+        Pump();
+        check(Released(a, "R2:Boss") && Released(b, "R2:Boss"), "the last one arriving after a room change releases too");
+
+        a.EnterScene("R4");
+        b.EnterScene("R5");
+        Pump();
+        Clear();
+        Key(a, Msg.FightReady, "R4:Boss");
+        Pump();
+        check(!AnyRelease(a), "still waiting for the other player");
+        b.Client.Disconnect();
+        Pump();
+        check(Released(a, "R4:Boss"), "a player disconnecting releases whoever waited for them");
+
+        server.Stop();
     }
 }

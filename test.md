@@ -25,25 +25,58 @@ Each test has one player get grabbed or robbed while the other stands somewhere 
 - [ ] Do the reverse: when the owner gets hit by a multi-hit attack, the other player should not take damage.
 - [ ] **Check this closely:** after a non-owner gets caught by Lace's multi-hit, the hero should recover normally. This is the part I'm least sure of, because the effect on the hero is in a prefab I couldn't read. Also tell me if the boss visibly jumps to fighting that player.
 
-## 3. Wave arenas start for everybody
+## 3. Fights wait for everybody (new, test this first)
 
-Good rooms: `tut_03` (Moss Mother), `bone_01`, `bone_18`, `dock_03c`, `ant_04_mid`.
+Whoever would start a boss or a wave arena freezes on the spot and sees who they are waiting for. The fight starts when the last player gets there. Holding **K** for 1.5 seconds kills your hero to get out. The key is `GiveUp` in the config.
 
-- [ ] **Both inside:** one player walks in. Enemies and gates appear for both, with no enemies invisible to one player.
-- [ ] **One outside:** the other player starts the fight while you stand outside the arena in the same room.
-  - You should see the enemies, your gates stay open, and the fight runs without you.
-  - Walking in closes the gates behind you.
-- [ ] **Joining late:** enter the room while the fight is running. The arena catches up to the current wave, enemies that are already dead stay dead, and the fight can still be finished.
-- [ ] **The end:** both players get gates open, camera free and music back. Nobody stays locked in, and the arena doesn't restart when you come back.
-- [ ] **Double start:** both players step into the trigger at the same moment. The fight should end normally. Before this fix, a double start could mean it never ends.
+Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_boss` (Bell Beast web), `belltown_08` (Father of the Flame), `bone_east_12` (Lace), `shellwood_22` (Seth), `library_13` (Trobbio).
 
-## 4. Boss arenas start for everybody
+**The basics**
+- [ ] One player walks in: they freeze, in the air as well, and can't move, attack or take damage. The boss and the gates do nothing yet.
+- [ ] The text names the missing player and which room they're in. The other player sees "... is waiting for you at a fight in ...".
+- [ ] The second player walks in: both get control back at the same moment, and the fight starts for both. Gates close, the boss wakes, waves come.
+- [ ] At the end of the fight: gates open, camera free, music back. Coming back later doesn't start it again.
 
-Same idea as section 3, for boss rooms started by a controller: `belltown_08` (Father of the Flame), `bellway_centipede_arena`, `bone_east_08`, `coral_11`, `greymoor_05_boss` / `greymoor_08_boss` (Moorwing), `room_crowcourt_02`, `shellwood_18`, `ward_02_boss`, `cog_dancers_boss`, `abyss_cocoon`.
+**Getting out**
+- [ ] Hold K while frozen: the hero dies normally, respawns normally and can move again. The other player's text goes away.
+- [ ] Hold K only briefly and let go: nothing happens.
+- [ ] Press K with the chat open, or while paused: nothing happens.
+- [ ] Quit to the menu while frozen: the other player isn't stuck waiting for you.
+- [ ] Disconnect one player while the other is frozen: the frozen player's fight starts by itself.
 
-- [ ] One player walks in while the other is nearby: the boss and gates appear for both.
-- [ ] One player walks in while the other is far away or behind a wall: the second player isn't locked out, and joins when they arrive.
-- [ ] **Check this closely:** a second player who is right at the door when the first walks in. They could still end up on the wrong side of the gate, because I only check distance and whether a wall is in between.
+**Awkward cases**
+- [ ] **Coming back:** one player dies during the fight and returns to the room. They should go straight back in without a freeze, while the survivor is still in the room.
+- [ ] **Both die:** the room empties. Coming back waits for both again.
+- [ ] **Different rooms:** each player freezes at a different fight. Nothing starts until one of them gives up. This is on purpose, each sees where the other is.
+- [ ] **Double touch:** both step in at the same moment. The fight starts once and ends normally.
+- [ ] **Web hit (`bone_05_boss`):** one player hits the web and freezes. The other sees the web still there and has to hit it too.
+- [ ] **Dialogue first (Seth, Lace, Widow in `belltown_shrine`):** the freeze comes when the conversation would start or end. Control has to come back afterwards, without anybody stuck in a text box. **Check this closely**, these are the ones I trust least.
+- [ ] **Fight with several parts (`belltown_08`, `coral_11`, `bone_east_08`):** there should be one freeze only, not a second one partway through. If you see a second one, tell me the room.
+
+**Things that should not freeze**
+- [ ] Alone in a session (nobody else connected): no freeze, no text.
+- [ ] A teammate on the main menu: no real wait, at most a tiny hitch.
+- [ ] Memory rooms (`Memory_*`): no freeze.
+- [ ] Silk vines blocking the path in `mosstown_02`, ordinary enemies, and rooms with no fight.
+
+**Worth knowing**
+- A teammate can still walk around while you are frozen, and can hit a sleeping boss before starting the fight. Tell me if this turns out to be a problem.
+- Dying to get out costs what a death costs, including your rosaries in a cocoon.
+- K is keyboard only. There is no controller button yet.
+
+**Not held back:** these still start for one player the old way. I didn't trace what starts them, or chose to leave them out.
+- Garmond's fights (`library_09`, `hang_04_boss`)
+- Song Knights outside a held arena (`hang_07`, `song_02`, `song_25`, `song_27`)
+- `clover_10`, `coral_29`, `weave_03`
+- Any wave arena that a controller I don't know about starts directly
+
+If a fight starts without a freeze, send me the room. It's usually one line to add.
+
+## 4. Arena details
+
+- [ ] **Joining late:** a player who dies during a wave arena and returns: the arena catches up to the current wave, dead enemies stay dead, the fight can still be finished, and the gates close behind them once they're in.
+- [ ] **The end:** both players get gates open, camera free and music back in `tut_03`, `bone_01`, `bone_18`, `dock_03c` and `ant_04_mid`.
+- [ ] **Boss arenas:** the boss and gates appear for both in `belltown_08`, `bellway_centipede_arena`, `bone_east_08`, `coral_11`, `greymoor_05_boss` / `greymoor_08_boss`, `room_crowcourt_02`, `shellwood_18`, `ward_02_boss`, `cog_dancers_boss`, `abyss_cocoon`.
 
 ## 5. A dead owner doesn't freeze the boss
 
@@ -65,5 +98,5 @@ Same idea as section 3, for boss rooms started by a controller: `belltown_08` (F
 These are not bugs in this build, and I left them as they are on purpose:
 
 - **Act 3 is not shared.** Each player's story act is their own, because changing it means a respawn and a wake-up sequence that I don't want to force on someone mid-play. If only one player reaches Act 3, your rooms will differ. Tell me if you get that far and it's a problem.
-- **Steel Servant** (`bone_steel_servant`) holds the hero for a conversation, so I didn't share its opening. Its waves should still start for the other player, but I didn't confirm that it starts them the same way as other arenas.
+- **Steel Servant** (`bone_steel_servant`) now freezes before it captures the hero. I didn't confirm that its waves start the same way as other arenas.
 - **Lifts** still aren't shared.
