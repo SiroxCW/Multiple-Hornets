@@ -1,11 +1,12 @@
 <div align="center">
 
-# Multiple Hornets
+# :sewing_needle: Multiple Hornets
+
+[![GitHub license](https://img.shields.io/github/license/SiroxCW/multiple-hornets.svg?style=for-the-badge)](https://github.com/SiroxCW/Multiple-Hornets/blob/master/license)
 
 ![](https://raw.githubusercontent.com/michei69/disclaimers/refs/heads/main/ai/x4.png)
 
-An all-in-one co-op multiplayer mod for Hollow Knight: Silksong. Play together in one shared Pharloom:
-see each other, fight the same enemies and bosses, and share all progression.
+**An all-in-one co-op multiplayer mod for Hollow Knight: Silksong which syncs everything.**
 
 </div>
 
