@@ -24,6 +24,7 @@ internal static class GiftSync
     private const string RosaryMachine = "rosary_string_machine";
 
     private static readonly HashSet<string> Handled = new();
+    private static readonly HashSet<string> FromTeammates = new();
     private static CollectableItemPickup? _pickup;
     private static PersistentBoolItem? _fsmSource;
     private static bool _paidForByCollector;
@@ -85,6 +86,26 @@ internal static class GiftSync
         WorldSync.Changes.Report(key, gained, WorldCategory.Items, item.name);
     }
 
+    /// <summary>
+    /// Two players can pick up their own copy of the same thing at once. Whoever hears from the other first already has
+    /// it by then, and the pickup in their hands must not count a second time. Only for what never comes back.
+    /// </summary>
+    public static bool TeammateGotIt()
+    {
+        if (WorldSync.IsApplying || !WorldSync.IsActive) return false;
+
+        var key = OnceOnlyKey();
+        return key != null && FromTeammates.Contains(key);
+    }
+
+    private static string? OnceOnlyKey()
+    {
+        var persistent = _fsmSource ? _fsmSource : _pickup ? _pickup!.persistent : null;
+        if (persistent) return persistent!.GetIsSemiPersistent() ? null : PersistentKey(persistent);
+
+        return _pickup && !string.IsNullOrEmpty(_pickup!.playerDataBool) ? WorldKeys.GiftPlayerDataPickup + _pickup.playerDataBool : null;
+    }
+
     private static string PersistentKey(PersistentBoolItem persistent)
     {
         var data = persistent.ItemData;
@@ -126,7 +147,11 @@ internal static class GiftSync
     {
         public bool Handles(string key) => key.StartsWith(WorldKeys.Gift);
 
-        public void Reset() => Handled.Clear();
+        public void Reset()
+        {
+            Handled.Clear();
+            FromTeammates.Clear();
+        }
 
         public void CaptureAll(WorldReporter reporter)
         {
@@ -146,6 +171,7 @@ internal static class GiftSync
             if (entry.Key.StartsWith(WorldKeys.GiftUnique) && !item.CanGetMore()) return null;
             if (_catchUp && AlreadyCollectedInOwnSave(entry.Key)) return null;
 
+            FromTeammates.Add(entry.Key);
             item.Collect(entry.Value, showPopup: !WorldSync.IsCatchingUp);
             return $"found {item.GetPopupName()}";
         }
@@ -232,17 +258,25 @@ internal static class ShopPurchasePatch
 [HarmonyPatch(typeof(CollectableItem), nameof(CollectableItem.Collect))]
 internal static class CollectableCollectPatch
 {
-    private static void Prefix(CollectableItem __instance, out int __state)
+    private static bool Prefix(CollectableItem __instance, out int __state)
     {
         __state = -1;
         try
         {
+            if (GiftSync.TeammateGotIt())
+            {
+                Log.Debug($"Pickup of {__instance.name} does not count, a teammate was first");
+                return false;
+            }
+
             __state = __instance.CollectedAmount;
         }
         catch (Exception e)
         {
             Log.Exception("CollectableCollectPatch.Prefix", e);
         }
+
+        return true;
     }
 
     private static void Postfix(CollectableItem __instance, int __state)

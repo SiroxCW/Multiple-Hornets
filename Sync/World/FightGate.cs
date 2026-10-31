@@ -25,6 +25,13 @@ internal static class FightGate
     private const float FollowUpSeconds = 10f;
     private const string OpenGatesEvent = "BG OPEN";
 
+    /// <summary>
+    /// How long everybody can be in the room with somebody who waits. A teammate's game may have nothing to stop them
+    /// at (it does not always start the same way for both), and nothing else would ever end the wait. They can still
+    /// walk in afterwards, the gates stay open for them.
+    /// </summary>
+    private const float EverybodyInRoomSeconds = 15f;
+
     /// <summary>Started in this room, or part of what started. Some fights start in two steps or through a second object.</summary>
     private static readonly HashSet<string> Started = new();
     private static readonly Dictionary<ushort, string> Waiting = new();
@@ -34,6 +41,7 @@ internal static class FightGate
     private static bool _tookControl;
     private static Vector3 _position;
     private static float _giveUpHeld;
+    private static float _everybodyInRoom;
     private static float _followUpsUntil;
     private static bool _fightRunning;
     private static bool _sawBoss;
@@ -214,9 +222,34 @@ internal static class FightGate
             hero.transform.position = _position;
         }
 
+        if (held.Sent)
+        {
+            _everybodyInRoom = IsEverybodyInRoom() ? _everybodyInRoom + Time.unscaledDeltaTime : 0f;
+            if (_everybodyInRoom >= EverybodyInRoomSeconds)
+            {
+                StartWithoutThem(held);
+                return;
+            }
+        }
+
         var giving = Input.GetKey(ModConfig.GiveUpKey) && !InputBlocker.IsBlocking && Time.timeScale > 0f;
         _giveUpHeld = giving ? _giveUpHeld + Time.unscaledDeltaTime : 0f;
         if (_giveUpHeld >= GiveUpSeconds) GiveUp(hero);
+    }
+
+    private static bool IsEverybodyInRoom()
+    {
+        var scene = GameState.CurrentScene;
+        return Session.Players.Values.All(player => player.Scene == scene || player.Scene.Length == 0);
+    }
+
+    private static void StartWithoutThem(HeldStart held)
+    {
+        Log.Debug($"Fight {held.Key} starts, everybody is in the room but not at it");
+        Cancel();
+        SendKey(Msg.FightStarted, held.Key);
+        _followUpsUntil = Time.unscaledTime + FollowUpSeconds;
+        Run(held);
     }
 
     private static void TakeControl(HeroController hero)
@@ -255,6 +288,7 @@ internal static class FightGate
     {
         _held = null;
         _giveUpHeld = 0f;
+        _everybodyInRoom = 0f;
         if (!_tookControl) return;
 
         _tookControl = false;
@@ -343,6 +377,7 @@ internal static class FightGate
                 : "Everybody is waiting at a different fight";
 
             var where = string.Join(", ", others.Select(player => $"{player.Name}: {RoomOf(player)}"));
+            if (_everybodyInRoom > 0f) where += $"\nStarts in {Mathf.CeilToInt(EverybodyInRoomSeconds - _everybodyInRoom)} seconds";
             detail = _giveUpHeld > 0f
                 ? "Keep holding to kill yourself..."
                 : $"{where}\nHold {ModConfig.GiveUpKey} to kill yourself and leave";

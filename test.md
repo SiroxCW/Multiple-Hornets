@@ -37,6 +37,15 @@ Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_
 - [ ] The second player walks in: both get control back at the same moment, and the fight starts for both. Gates close, the boss wakes, waves come.
 - [ ] At the end of the fight: gates open, camera free, music back. Coming back later doesn't start it again.
 
+**Moss Mother (`tut_03`), the fight from your last test**
+- [ ] Fresh arena, one player waits in another room, the other walks in: they freeze at the boss. Before this the fight just started.
+- [ ] The second player walks in: they also freeze when they get there, or the fight starts for both. Neither of you can walk past the boss.
+- [ ] Same again after having fought her once and quit: whoever enters first freezes, no walking through. The boss flag is now shared, so it starts the same way for both.
+- [ ] One player enters the room late on purpose while the fight runs (the other has given up waiting, see below): the gates stay open until they have walked past them, and only then close behind them.
+
+**Nothing to wait for anymore**
+- [ ] A player is frozen and the other stands in the same room without getting frozen: the text counts down from 15 seconds, then the fight starts. The other player can walk in afterwards. You should rarely see this. If you do, tell me the room, it means that fight still starts differently for the two of you.
+
 **Getting out**
 - [ ] Hold K while frozen: the hero dies normally, respawns normally and can move again. The other player's text goes away.
 - [ ] Hold K only briefly and let go: nothing happens.
@@ -66,10 +75,9 @@ Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_
 - K is keyboard only. There is no controller button yet.
 
 **Not held back:** these still start for one player the old way. I didn't trace what starts them, or chose to leave them out.
-- Garmond's fights (`library_09`, `hang_04_boss`)
+- Garmond's fight in `library_09`
 - Song Knights outside a held arena (`hang_07`, `song_02`, `song_25`, `song_27`)
-- `clover_10`, `coral_29`, `weave_03`
-- Any wave arena that a controller I don't know about starts directly
+- `clover_10`, `coral_29`
 
 If a fight starts without a freeze, send me the room. It's usually one line to add.
 
@@ -126,6 +134,10 @@ With cocoons, this now only comes up in fights the gate doesn't hold, because a 
 - [ ] The reverse: the player who is **not** the owner dies. The boss should keep fighting the owner without pausing or changing target.
 
 ## 7. Items and upgrades
+
+- [ ] **Berry someone else hit (`tut_01b`):** one player hits the berry and leaves it on the ground. The other enters the room: within a second their berry falls too, instead of still hanging there.
+- [ ] **Both collect at once:** both have a fallen berry and pick it up at the same moment. Each ends up with exactly 1. One of you may see the "found" message instead of a normal pickup.
+- [ ] **One collects:** the other's fallen berry disappears and they get 1 with the message.
 
 - [ ] **Rosary string machine** (`bone_01c`, `dock_01`, `greymoor_01`): only the player who pays gets the string.
 - [ ] **Courier delivery** (Belltown): only the player who takes the delivery gets the fragile item and its bar.

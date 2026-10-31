@@ -339,6 +339,20 @@ internal static class ServerModuleTests
 
         RunFightGate(check);
         RunCocoon(check);
+        RunGateGeometry(check);
+    }
+
+    private static void RunGateGeometry(Action<bool, string> check)
+    {
+        // The right gate of Tut_03 as seen from itself: a friend at x=85 must not count as being in at x=52.
+        var half = new UnityEngine.Vector2(0.8f, 7.6f);
+        var inside = new UnityEngine.Vector2(-18f, -5f);
+        check(GateGeometry.Crosses(new UnityEngine.Vector2(15f, -5f), inside, half), "a gate is in the way from outside the arena");
+        check(!GateGeometry.Crosses(new UnityEngine.Vector2(-1f, -5f), inside, half), "no gate is in the way once past it");
+        check(GateGeometry.Crosses(new UnityEngine.Vector2(0f, 0f), inside, half), "standing in the gate still counts as outside");
+        check(!GateGeometry.Crosses(new UnityEngine.Vector2(15f, 9f), new UnityEngine.Vector2(-18f, 9f), half), "a line above the gate does not cross it");
+        check(GateGeometry.Crosses(new UnityEngine.Vector2(0f, 15f), new UnityEngine.Vector2(0f, -15f), half), "a line straight down through the gate crosses it");
+        check(!GateGeometry.Crosses(new UnityEngine.Vector2(5f, 15f), new UnityEngine.Vector2(5f, -15f), half), "a line straight down beside the gate does not");
     }
 
     private static void RunCocoon(Action<bool, string> check)

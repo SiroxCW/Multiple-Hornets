@@ -25,6 +25,8 @@ internal static class TriggerSync
     private const string OpenGatesEvent = "BG OPEN";
     private const float ReachRange = 25f;
     private const int TerrainMask = 1 << (int)GlobalEnums.PhysLayers.TERRAIN;
+    private const string GateFsm = "BG Control";
+    private const float GateRefreshSeconds = 1f;
 
     /// <summary>Only these are shared. Most objects with a trigger are personal: reminders, sounds, area titles.</summary>
     private static readonly Rule[] Rules =
@@ -75,12 +77,12 @@ internal static class TriggerSync
             arena: true),
         new(new[] { "wisp pyre effigy" }, new[] { "Dormant", "Set HP", "Close Gates" }, new[] { "Close Gates", "Intro" }, arena: true),
         new(new[] { "centipede control" }, new[] { "Dormant" }, new[] { "Set HP" }, arena: true),
-        new(new[] { "wake scene" }, new[] { "Idle" }, new[] { "Transition to Silent", "State" }, arena: true),
+        new(new[] { "wake scene", "start range" }, new[] { "Idle" }, new[] { "Transition to Silent", "State" }, arena: true),
         new(new[] { "dancer control" }, new[] { "Dormant" }, new[] { "Gate Close" }, arena: true),
         new(new[] { "vampire gnat scene" }, new[] { "Idle" }, new[] { "Enter" }, arena: true),
         new(new[] { "wake range" }, new[] { "Idle" }, new[] { "Wake" }, arena: true, fight: false),
         new(new[] { "door closer" }, new[] { "State 1" }, new[] { "State 2" }, arena: true),
-        new(new[] { "battle start" }, new[] { "Idle" }, new[] { "Enter" }, arena: true),
+        new(new[] { "battle start" }, new[] { "Idle" }, new[] { "Enter", "Start Pause" }, arena: true),
         new(new[] { "song pilgrim scene" }, new[] { "Unwoken" }, new[] { "Wake" }, arena: true, fight: false),
         new(new[] { "initial servitor scene" }, new[] { "Idle" }, new[] { "Send" }, arena: true, fight: false),
         new(new[] { "intro control" }, new[] { "Idle", "Encountered" }, new[] { "Scene Setup", "Lace Re-emerge" }, arena: true),
@@ -99,6 +101,13 @@ internal static class TriggerSync
         new(new[] { "skull king" }, new[] { "State Check", "In Roof" }, new[] { "Wake Antic", "Rewake Pause" }, arena: true),
         new(new[] { "pinstress boss" }, new[] { "Dormant" }, new[] { "Intro Antic" }, arena: true),
         new(new[] { "first weaver" }, new[] { "Dormant" }, new[] { "Refight Appear", "Intro Wave" }, arena: true),
+
+        // Wave arenas that something starts other than the touch of their trigger. An alarm, a harpoon ring, a
+        // preacher who notices the hero, a boss that wakes up by itself and only then starts its own arena.
+        new(new[] { "mossbone mother" }, new[] { "Dormant", "Check Hero in Room" }, new[] { "Start Battle" }, arena: true),
+        new(new[] { "detector" }, new[] { "Check Player Inside" }, new[] { "Start Battle" }, arena: true),
+        new(new[] { "simple battle", "battle scene" }, new[] { "State 1" }, new[] { "State 2" }, arena: true, startsBattle: true),
+        new(new[] { "scholar" }, new[] { "Walk L", "Sing L", "Walk R", "Sing R" }, new[] { "Look" }, arena: true, inBattle: true),
     };
 
     /// <summary>This runs for every state of every FSM in the game, the state name rules nearly all of them out.</summary>
@@ -107,7 +116,10 @@ internal static class TriggerSync
     private static readonly HashSet<string> ArenaStates = new(Rules.Where(rule => rule.Fight).SelectMany(rule => rule.To));
 
     private static readonly List<WaitingStart> Waiting = new();
+    private static readonly List<BoxCollider2D> Gates = new();
     private static string _waitingScene = "";
+    private static string _gatesScene = "";
+    private static float _gatesRefreshAt;
     private static bool _applying;
 
     public static void Init() => Session.RegisterHandler(Msg.WorldTrigger, OnWorldTrigger);
@@ -136,14 +148,55 @@ internal static class TriggerSync
         }
     }
 
-    /// <summary>Whether the hero could walk up to a place in this room right now, nothing solid is in between.</summary>
+    /// <summary>
+    /// Whether the hero could walk up to a place in this room right now, nothing solid is in between. Neither is a gate
+    /// that still stands open, it would close right in front of a hero on the wrong side of it.
+    /// </summary>
     public static bool CanReach(Vector2 position)
     {
         var hero = HeroController.SilentInstance;
         if (!hero) return false;
 
         Vector2 from = hero!.transform.position;
-        return Vector2.Distance(from, position) <= ReachRange && !Physics2D.Linecast(from, position, TerrainMask);
+        return Vector2.Distance(from, position) <= ReachRange && !Physics2D.Linecast(from, position, TerrainMask) &&
+            !CrossesGate(from, position);
+    }
+
+    private static bool CrossesGate(Vector2 from, Vector2 to)
+    {
+        RefreshGates();
+
+        foreach (var gate in Gates)
+        {
+            if (!gate) continue;
+
+            // Its collider is switched off while it stands open, its shape is still there.
+            var transform = gate.transform;
+            Vector2 start = transform.InverseTransformPoint(from);
+            Vector2 end = transform.InverseTransformPoint(to);
+            if (GateGeometry.Crosses(start - gate.offset, end - gate.offset, gate.size * 0.5f)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Only runs while somebody waits to get in. Bosses can bring their arena along in a scene that loads later.</summary>
+    private static void RefreshGates()
+    {
+        var scene = GameState.CurrentScene;
+        if (scene == _gatesScene && Time.unscaledTime < _gatesRefreshAt) return;
+
+        _gatesScene = scene;
+        _gatesRefreshAt = Time.unscaledTime + GateRefreshSeconds;
+        Gates.Clear();
+
+        foreach (var fsm in Object.FindObjectsByType<PlayMakerFSM>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (fsm.FsmName != GateFsm) continue;
+
+            var box = fsm.GetComponent<BoxCollider2D>();
+            if (box) Gates.Add(box);
+        }
     }
 
     /// <summary>Whether going to this state means a fight starts now.</summary>
@@ -156,7 +209,7 @@ internal static class TriggerSync
         if (!go || active == null) return false;
 
         var rule = FindRule(go.name);
-        return rule is { Fight: true } && rule.To.Contains(stateName) && rule.From.Contains(active.Name);
+        return rule is { Fight: true } && rule.To.Contains(stateName) && rule.From.Contains(active.Name) && rule.AppliesTo(fsm, stateName);
     }
 
     /// <summary>Everybody was held back and starts at once, nobody needs to hear it from us. An owner moves a puppet.</summary>
@@ -188,7 +241,7 @@ internal static class TriggerSync
 
         // Coming from anything else means this object was already running, the others know about it.
         var rule = FindRule(go.name);
-        if (rule == null || !rule.To.Contains(state.Name) || !rule.From.Contains(previous.Name)) return;
+        if (rule == null || !rule.To.Contains(state.Name) || !rule.From.Contains(previous.Name) || !rule.AppliesTo(fsm, state.Name)) return;
 
         var scene = GameState.CurrentScene;
         if (!Session.Players.Values.Any(player => player.Scene == scene)) return;
@@ -377,8 +430,15 @@ internal static class TriggerSync
 
     private sealed class Rule
     {
-        public Rule(string[] names, string[] from, string[] to, bool collectedByOne = false, bool arena = false, bool fight = true)
+        private readonly bool _startsBattle;
+        private readonly bool _inBattle;
+
+        public Rule(
+            string[] names, string[] from, string[] to, bool collectedByOne = false, bool arena = false, bool fight = true,
+            bool startsBattle = false, bool inBattle = false)
         {
+            _startsBattle = startsBattle;
+            _inBattle = inBattle;
             Fight = arena && fight;
             Names = names;
             From = from;
@@ -404,6 +464,11 @@ internal static class TriggerSync
 
         /// <summary>It starts a boss or an arena, nobody gets to do that alone.</summary>
         public bool Fight { get; }
+
+        /// <summary>For common names: the state has to start the arena itself, or the object has to be part of one.</summary>
+        public bool AppliesTo(Fsm fsm, string stateName) =>
+            (!_startsBattle || fsm.GetState(stateName)?.Actions.Any(action => action is CallMethodProper) == true) &&
+            (!_inBattle || fsm.GameObject.GetComponentInParent<BattleScene>(true) != null);
     }
 
     private readonly struct WaitingStart

@@ -42,7 +42,7 @@ internal sealed class PlayerDataDomain : IWorldDomain
 
     private static readonly (WorldCategory Category, string[] Names)[] IncludeExact =
     {
-        (WorldCategory.Bosses, Split("laceLeftDocks MelodyLiftCanReturn coralDrillerSoloReady soulSnareReady laceMeetCitadel trobbioCleanedUp")),
+        (WorldCategory.Bosses, Split("laceLeftDocks MelodyLiftCanReturn coralDrillerSoloReady soulSnareReady laceMeetCitadel trobbioCleanedUp encounteredMossMother")),
         (WorldCategory.World, Split(@"fixerBridgeConstructed fixerStatueConstructed fixerBridgeBreaking enclaveAddition_CloakLine
             enclaveAddition_PinRack boneBottomAddition_RagLine rhinoChurchUnlocked hitCrowCourtSwitch grubFarmerEmerged
             ShakraFinalQuestAppear SeenBelltownCutscene SeenFleatopiaEmpty MetTroupeHunterWild CaravanTroupeLeaderCanLeaveJudge
