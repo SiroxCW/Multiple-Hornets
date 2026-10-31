@@ -187,7 +187,8 @@ internal static class EnemySync
 
             // Facing someone means our hero here and the owner's hero there. The owner's facing is applied every
             // frame, so these would see a wrong side forever and restart their turn animation each time.
-            if (!action.Enabled || action.GetType().Name.StartsWith("Face"))
+            if (!action.Enabled || action.GetType().Name.StartsWith("Face") ||
+                PuppetActionFilter.IsPersonal(action, state.Fsm, TakingOver))
             {
                 action.Finished = true;
                 continue;
@@ -221,6 +222,16 @@ internal static class EnemySync
     public static bool IsPuppetFsm(Fsm fsm) =>
         FsmBindings.Count > 0 && FsmBindings.TryGetValue(fsm, out var binding) && binding.Entity.IsPuppet &&
         binding.Entity.IsValid && !binding.Entity.Health.isDead;
+
+    /// <summary>Set while somebody takes over an enemy and restarts the state the previous owner left it in.</summary>
+    public static bool TakingOver { get; set; }
+
+    /// <summary>
+    /// An FSM a puppet runs as an action has no binding but still means the owner's hero. A state the previous owner
+    /// left behind was about their hero too, the new owner only continues from it.
+    /// </summary>
+    public static bool UsesPuppetActions(Fsm fsm) =>
+        TakingOver || IsPuppetFsm(fsm) || (fsm.Host != null && IsPuppetFsm(fsm.Host));
 
     /// <summary>
     /// A puppet refused a transition. Events an FSM sends itself (timers, random choices, FINISHED) are the

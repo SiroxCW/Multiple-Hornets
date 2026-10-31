@@ -60,7 +60,7 @@ internal static class FsmActivateActionsPatch
 {
     private static bool Prefix(FsmState __instance, int startIndex, ref bool __result)
     {
-        if (!EnemySync.IsPuppetFsm(__instance.Fsm)) return true;
+        if (!EnemySync.UsesPuppetActions(__instance.Fsm)) return true;
 
         __result = EnemySync.ActivatePuppetActions(__instance, startIndex);
         return false;

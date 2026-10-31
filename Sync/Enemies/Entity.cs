@@ -102,6 +102,8 @@ internal sealed class Entity
     private const int MaxDeathAttempts = 3;
     private const float DeathCleanupTime = 2f;
     private const float DeathCleanupTimeNoEffects = 15f;
+    private const string MultiHitVariable = "Hero Event";
+    private const string CatchingHeroVariable = "Catching Hero";
 
     private readonly SnapshotInterpolator _interpolator = new();
     private RigidbodyType2D _storedBodyType;
@@ -191,7 +193,7 @@ internal sealed class Entity
         {
             // FSMs below a nested enemy belong to that enemy.
             if (fsm.GetComponentInParent<HealthManager>(true) != health || fsm.Fsm == null) continue;
-            if (IsPartOfCorpse(health, fsm.transform)) continue;
+            if (IsPartOfCorpse(health, fsm.transform) || IsMultiHit(fsm)) continue;
             entity.Fsms.Add(new FsmBinding(entity, entity.Fsms.Count, fsm));
         }
 
@@ -213,6 +215,31 @@ internal sealed class Entity
         foreach (var corpse in effects.instantiatedCorpses)
         {
             if (corpse && transform.IsChildOf(corpse.transform)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Attacks that keep wounding whoever stands in them react to the local hero by touch and damage that hero. Every
+    /// game has to run them for its own hero: following the owner, ours would never get hurt by touching them and
+    /// would get hurt whenever the owner's hero does.
+    /// </summary>
+    private static bool IsMultiHit(PlayMakerFSM fsm)
+    {
+        var name = fsm.FsmName.ToLowerInvariant();
+        return name.Contains("wounder") || name.Contains("multihit") || fsm.FsmVariables.FindFsmString(MultiHitVariable) != null;
+    }
+
+    /// <summary>
+    /// A jailer that carries its catch away is gone with it. Continuing here would either hold nothing forever or
+    /// drag the new owner off to the prison too.
+    /// </summary>
+    private bool IsCarryingOwnerAway()
+    {
+        foreach (var binding in Fsms)
+        {
+            if (binding.Fsm.Variables.FindFsmBool(CatchingHeroVariable) is { Value: true }) return true;
         }
 
         return false;
@@ -266,13 +293,30 @@ internal sealed class Entity
 
         if (Health.isDead) return;
 
+        if (IsCarryingOwnerAway())
+        {
+            Log.Debug($"Enemy {Name} left with its previous owner");
+            Health.isDead = true;
+            GameObject.SetActive(false);
+            return;
+        }
+
         // Waits and timers that finished while transitions were blocked would leave the FSM stuck forever,
         // restarting the current state lets the AI continue from where the previous owner was.
         var now = Time.realtimeSinceStartup;
         foreach (var binding in Fsms)
         {
             if (!binding.IsRunning) continue;
-            EnemySync.ForceSwitchState(binding.Fsm, binding.Fsm.ActiveState);
+
+            EnemySync.TakingOver = true;
+            try
+            {
+                EnemySync.ForceSwitchState(binding.Fsm, binding.Fsm.ActiveState);
+            }
+            finally
+            {
+                EnemySync.TakingOver = false;
+            }
 
             // Whatever woke this enemy for us (e.g. walking into a boss arena) was refused while it was a
             // puppet; deliver it now so the enemy reacts to us.
