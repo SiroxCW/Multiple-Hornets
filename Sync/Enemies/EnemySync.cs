@@ -107,7 +107,7 @@ internal static class EnemySync
     public static void Update()
     {
         var enabled = Session.IsConnected && Session.Settings.SyncEnemies && GameState.InGameplay;
-        var scene = enabled ? GameState.CurrentScene : "";
+        var scene = enabled && GameState.CurrentScene != GameState.ReloadingRoom ? GameState.CurrentScene : "";
         if (scene != _scene) SwitchScene(scene);
         if (_scene.Length == 0) return;
 

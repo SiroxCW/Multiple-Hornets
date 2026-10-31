@@ -44,6 +44,12 @@ Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_
 - [ ] One player quits during the fight and comes back: the gates stay open until they have walked past them, and only then close behind them.
 - [ ] If anyone stays frozen while the other can walk around the room freely, that's a bug. The fight won't start by itself, so tell me the room.
 
+**After dying in the room (the bug from your last test)**
+- [ ] Both freeze at Moss Mother and both hold K, so you respawn in `tut_03` without leaving it. Walk back and start the fight: it's one boss, moving the same for both of you, and a hit by either player counts on the same health.
+- [ ] One player goes down in a cocoon during that fight: the boss stays visible for them and keeps fighting the other player. After being freed, the boss is still there.
+- [ ] The log line `Room Tut_03 loaded again` should appear after each respawn in the room.
+- [ ] Alone in a room: kill some enemies, die and respawn in that room. The enemies are back, like in the normal game.
+
 **Getting out**
 - [ ] Hold K while frozen: the hero dies normally, respawns normally and can move again. The other player's text goes away.
 - [ ] Hold K only briefly and let go: nothing happens.

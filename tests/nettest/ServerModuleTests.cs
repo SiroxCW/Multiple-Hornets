@@ -522,6 +522,30 @@ internal static class ServerModuleTests
         Pump();
         check(Released(b, "R1:Boss"), "joining a fight that runs needs nobody else");
 
+        // Dying and respawning in the same room looks like walking out and straight back in.
+        a.EnterScene("R5");
+        b.EnterScene("R5");
+        Pump();
+        Clear();
+        Key(a, Msg.FightReady, "R5:Boss");
+        Pump();
+        b.EnterScene("Reloading");
+        b.EnterScene("R5");
+        Pump();
+        check(!AnyRelease(a) && !AnyRelease(b), "a teammate respawning in the room is still waited for");
+
+        Key(b, Msg.FightReady, "R5:Boss");
+        Pump();
+        check(Released(a, "R5:Boss") && Released(b, "R5:Boss"), "the fight starts once the respawned teammate gets there");
+
+        Clear();
+        b.EnterScene("Reloading");
+        b.EnterScene("R5");
+        Pump();
+        Key(b, Msg.FightReady, "R5:Boss");
+        Pump();
+        check(Released(b, "R5:Boss") && !AnyRelease(a), "respawning during the fight gets straight back in");
+
         a.EnterScene("R2");
         b.EnterScene("R2");
         Pump();

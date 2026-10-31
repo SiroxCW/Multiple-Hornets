@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace MultipleHornetsMod.Game;
 
@@ -7,6 +8,15 @@ internal static class GameState
 {
     /// <summary>The room the local player is in, empty in menus and while no hero exists.</summary>
     public static string CurrentScene { get; private set; } = "";
+
+    /// <summary>
+    /// Shown for one frame when the room we are in loads again, after a death that respawns in it. Everything in it
+    /// was replaced, and all that depends on the room has to start over just like after walking out and back in.
+    /// </summary>
+    public const string ReloadingRoom = "Reloading";
+
+    private static string _loadedRoom = "";
+    private static int _loadedRoomHandle;
 
     public static bool InGameplay => CurrentScene.Length > 0;
 
@@ -24,12 +34,25 @@ internal static class GameState
         {
             CurrentScene = "";
             HeroAnimator = null;
+            _loadedRoom = "";
             return;
         }
 
-        CurrentScene = gm.sceneName;
+        CurrentScene = WasRoomReloaded(gm) ? ReloadingRoom : gm.sceneName;
         HeroAnimator ??= hero.GetComponent<tk2dSpriteAnimator>();
         if (HeroAnimator is tk2dSpriteAnimator animator && !animator) HeroAnimator = hero.GetComponent<tk2dSpriteAnimator>();
+    }
+
+    private static bool WasRoomReloaded(GameManager gm)
+    {
+        var active = SceneManager.GetActiveScene();
+        if (active.name != gm.rawSceneName) return false;
+
+        var reloaded = active.name == _loadedRoom && active.handle != _loadedRoomHandle;
+        _loadedRoom = active.name;
+        _loadedRoomHandle = active.handle;
+        if (reloaded) Core.Log.Debug($"Room {active.name} loaded again");
+        return reloaded;
     }
 
     public static Camera? MainCamera
