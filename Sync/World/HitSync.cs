@@ -122,6 +122,100 @@ internal static class LeverTk2dReplayPatch
     }
 }
 
+/// <summary>
+/// A pod bounces whoever hit it, and the game assumes that is the local hero: it pulls the hero to the pod and throws
+/// them up. A teammate's hit only shows what happens to the pod.
+/// </summary>
+[HarmonyPatch(typeof(BouncePod), nameof(BouncePod.Hit))]
+internal static class BouncePodReplayPatch
+{
+    private static bool Prefix(BouncePod __instance, HitInstance damageInstance, ref IHitResponder.HitResponse __result)
+    {
+        if (!RemoteHit.Active) return true;
+
+        __result = IHitResponder.Response.None;
+        if (!__instance.gameObject.activeInHierarchy || __instance.isBroken || !__instance.IsActive) return false;
+        if (!damageInstance.IsFirstHit || __instance.inertTimeLeft > 0f) return false;
+
+        __result = IHitResponder.Response.GenericHit;
+        __instance.lastHit = damageInstance;
+        __instance.lastHitCollider = null;
+        __instance.hitCount++;
+        if (__instance.hitsToBreak > 0 && __instance.hitCount >= __instance.hitsToBreak)
+        {
+            __instance.SetActive(value: false, isInstant: true);
+            __instance.isBroken = true;
+            __instance.PlayAnim(__instance.breakAnim);
+            __instance.onBreak.Invoke();
+        }
+
+        var direction = damageInstance.GetHitDirection(HitInstance.TargetType.BouncePod);
+        if (direction == HitInstance.HitDirection.Down && damageInstance.AttackType == AttackTypes.Nail)
+        {
+            __instance.PlayAnim(__instance.bounceAnim);
+            __instance.SpawnHitEffects();
+            __instance.SendBounceHit();
+        }
+        else
+        {
+            __instance.DoInertHit(direction != HitInstance.HitDirection.Left);
+        }
+
+        return false;
+    }
+}
+
+/// <summary>A balloon is the same, its bounce takes over the hero for as long as it lasts.</summary>
+[HarmonyPatch(typeof(BounceBalloon), nameof(BounceBalloon.Hit))]
+internal static class BounceBalloonReplayPatch
+{
+    private static bool Prefix(BounceBalloon __instance, ref IHitResponder.HitResponse __result)
+    {
+        if (!RemoteHit.Active) return true;
+
+        __result = IHitResponder.Response.None;
+        if (!__instance.isInflated) return false;
+
+        __result = IHitResponder.Response.GenericHit;
+        if (__instance.animator) __instance.animator.Play(BounceBalloon._bounceAnim, 0, 0f);
+        __instance.bounceSound.SpawnAndPlayOneShot(__instance.transform.position);
+        if (__instance.hitParticles) __instance.hitParticles.PlayParticles();
+        return false;
+    }
+}
+
+// Other things that can be hit push the hero back themselves. That is for whoever hit them.
+
+[HarmonyPatch(typeof(HeroController), nameof(HeroController.RecoilLeft))]
+internal static class SuppressRecoilLeftPatch
+{
+    private static bool Prefix() => !RemoteHit.Active;
+}
+
+[HarmonyPatch(typeof(HeroController), nameof(HeroController.RecoilRight))]
+internal static class SuppressRecoilRightPatch
+{
+    private static bool Prefix() => !RemoteHit.Active;
+}
+
+[HarmonyPatch(typeof(HeroController), nameof(HeroController.RecoilLeftLong))]
+internal static class SuppressRecoilLeftLongPatch
+{
+    private static bool Prefix() => !RemoteHit.Active;
+}
+
+[HarmonyPatch(typeof(HeroController), nameof(HeroController.RecoilRightLong))]
+internal static class SuppressRecoilRightLongPatch
+{
+    private static bool Prefix() => !RemoteHit.Active;
+}
+
+[HarmonyPatch(typeof(HeroController), nameof(HeroController.RecoilDown))]
+internal static class SuppressRecoilDownPatch
+{
+    private static bool Prefix() => !RemoteHit.Active;
+}
+
 [HarmonyPatch(typeof(DamageEnemies), nameof(DamageEnemies.DoDamage), typeof(GameObject), typeof(bool))]
 internal static class DamageEnemiesDoDamagePatch
 {

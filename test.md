@@ -49,6 +49,29 @@ Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_
 - [ ] One player goes down in a cocoon during that fight: the boss stays visible for them and keeps fighting the other player. After being freed, the boss is still there.
 - [ ] The log line `Room Tut_03 loaded again` should appear after each respawn in the room.
 
+**Invisible enemy in a wave arena (`Ant_05b`, the bug from your last test)**
+- [ ] One player enters first, the other a few seconds later. Start the arena and fight through all waves. Neither player gets hit by something invisible, and the last wave's ant comes out of the ground for both.
+- [ ] Killing the last enemy finishes the arena and opens the gates for both.
+
+**Overgrown pilgrims (`Mosstown_01`)**
+- [ ] One player enters first, the other later. Whoever is closer gets shot at, and it keeps working when you swap who is closer. It shouldn't stand around doing nothing after the target changes.
+- [ ] The log has no `NullReferenceException` with `FaceObject` right after `Enemy Pilgrim Moss Spitter`.
+
+**Bouncing pods**
+- [ ] Both slash down at the same time, only one player hits the pod. Only that player bounces, nobody gets pulled to it. The other still sees the pod react.
+
+**Bell shrine (`Bellshrine`, needs a shrine you haven't rung yet)**
+- [ ] One player hits the lever, the other enters while it plays. The door opens for both without leaving the room.
+
+**Toll bench (`Bone_01c` or another bell bench you haven't paid for)**
+- [ ] One player pays with the other watching. The other sees the machine retract, not an instant jump to the end. The bench works for both.
+- [ ] One player pays while the other has the same prompt open. Only the payer loses rosaries, and the other gets their controls back.
+
+**Lifts (`Dock_01`, `Room_Forge`)**
+- [ ] One player steps on a lift. It moves in both games, in the same direction.
+- [ ] The rider stops floating for the other player. Ride it back too.
+- [ ] One player stands under the lift as it comes down. It turns around in both games.
+
 **Frozen game after a cocoon (the bug from your last test)**
 - [ ] Moss Mother has summoned and lost her crawlers at least once. The player who owned them goes down in a cocoon: wait at least 10 seconds. Time keeps running for both of you, with no freeze.
 - [ ] She summons crawlers again after that handover: they drop in as usual, can be killed, and disappear normally.
