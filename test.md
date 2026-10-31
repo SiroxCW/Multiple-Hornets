@@ -38,13 +38,11 @@ Good rooms: `tut_03` (Moss Mother, wave arena), `bone_01`, `dock_03c`, `bone_05_
 - [ ] At the end of the fight: gates open, camera free, music back. Coming back later doesn't start it again.
 
 **Moss Mother (`tut_03`), the fight from your last test**
-- [ ] Fresh arena, one player waits in another room, the other walks in: they freeze at the boss. Before this the fight just started.
-- [ ] The second player walks in: they also freeze when they get there, or the fight starts for both. Neither of you can walk past the boss.
-- [ ] Same again after having fought her once and quit: whoever enters first freezes, no walking through. The boss flag is now shared, so it starts the same way for both.
-- [ ] One player enters the room late on purpose while the fight runs (the other has given up waiting, see below): the gates stay open until they have walked past them, and only then close behind them.
-
-**Nothing to wait for anymore**
-- [ ] A player is frozen and the other stands in the same room without getting frozen: the text counts down from 15 seconds, then the fight starts. The other player can walk in afterwards. You should rarely see this. If you do, tell me the room, it means that fight still starts differently for the two of you.
+- [ ] Neither player has fought her, one waits in another room, the other walks in: they freeze at the boss. Before this the fight just started.
+- [ ] The second player walks in: they freeze when they get there too, or the fight starts for both. Neither of you can walk past her.
+- [ ] After fighting her once and quitting, whoever enters first freezes, with no walking through. That includes your current saves, where only you have met her and your friend loads straight into her room.
+- [ ] One player quits during the fight and comes back: the gates stay open until they have walked past them, and only then close behind them.
+- [ ] If anyone stays frozen while the other can walk around the room freely, that's a bug. The fight won't start by itself, so tell me the room.
 
 **Getting out**
 - [ ] Hold K while frozen: the hero dies normally, respawns normally and can move again. The other player's text goes away.

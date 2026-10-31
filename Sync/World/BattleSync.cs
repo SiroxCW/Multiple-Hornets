@@ -8,6 +8,7 @@ using MultipleHornetsMod.Game;
 using MultipleHornetsMod.Net;
 using MultipleHornetsMod.Sync.Enemies;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace MultipleHornetsMod.Sync.World;
 
@@ -20,6 +21,8 @@ namespace MultipleHornetsMod.Sync.World;
 internal static class BattleSync
 {
     private const float IncomingLifetime = 30f;
+    private const string ReEncounterFsm = "Re-Encounter";
+    private const string ReEncounterStart = "State 1";
 
     private static readonly Dictionary<BattleScene, Vector2> Running = new();
     private static readonly Dictionary<BattleScene, WaitingBattle> Waiting = new();
@@ -120,6 +123,21 @@ internal static class BattleSync
 
         if (battle.camLocks && !battle.dontDisableCamlocksOnEnd) battle.camLocks.SetActive(false);
         if (battle.activeDuringBattle) battle.activeDuringBattle.SetActive(false);
+    }
+
+    /// <summary>
+    /// The trigger of Moss Mother's arena only works for somebody who met her, and it looks that up once when the room
+    /// loads. Loading a save into her room gets there before the teammate's flag does.
+    /// </summary>
+    public static void RecheckEncounter()
+    {
+        foreach (var fsm in Object.FindObjectsByType<PlayMakerFSM>(FindObjectsSortMode.None))
+        {
+            if (fsm.FsmName != ReEncounterFsm) continue;
+
+            var battle = fsm.GetComponent<BattleScene>();
+            if (battle && !battle!.started && !battle.completed && !Running.ContainsKey(battle)) fsm.SetState(ReEncounterStart);
+        }
     }
 
     private static void Send(BattleScene battle, Vector2 position)

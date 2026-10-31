@@ -15,6 +15,8 @@ namespace MultipleHornetsMod.Sync.World;
 /// </summary>
 internal sealed class PlayerDataDomain : IWorldDomain
 {
+    private const string EncounteredMossMother = "encounteredMossMother";
+
     private static readonly HashSet<string> ExcludeExact = new(Split(@"
         atBench isInvincible infiniteAirJump disablePause disableSaveQuit disableInventory isInventoryOpen
         disableSilkAbilities travelling IsTeleporting damagedBlue damagedPurple HasStoredMemoryState IsSilkSpoolBroken
@@ -181,6 +183,7 @@ internal sealed class PlayerDataDomain : IWorldDomain
             if (value) return null;
 
             value = true;
+            if (name == EncounteredMossMother) BattleSync.RecheckEncounter();
             return Names.DescribeFlag(name);
         }
 
