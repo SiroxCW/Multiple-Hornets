@@ -1,5 +1,6 @@
 using System.Collections.Generic;
-using UnityEngine;
+using HarmonyLib;
+using HutongGames.PlayMaker.Actions;
 
 namespace MultipleHornetsMod.Sync.World;
 
@@ -73,9 +74,9 @@ internal sealed class InventoryDomain : IWorldDomain
             var crest = ToolItemManager.GetCrestByName(name);
             if (!crest || crest.IsUnlocked) return null;
 
+            // A crest has no popup name, the game's item message can't show one.
             crest.Unlock();
-            if (!WorldSync.IsCatchingUp) ShowPopup(crest);
-            return $"obtained the {crest.GetPopupName()}";
+            return $"obtained the crest {crest.DisplayName}";
         }
 
         if (entry.Key.StartsWith(WorldKeys.Quest))
@@ -155,16 +156,20 @@ internal sealed class InventoryDomain : IWorldDomain
 
         ToolItemManager.AutoEquip(tool);
     }
+}
 
-    private static void ShowPopup(ICollectableUIMsgItem item)
+/// <summary>
+/// A shrine switches itself off when its crest is already unlocked. A player who stabbed it before a teammate's crest
+/// arrived comes back to it through door_memoryEnd, under a black screen, and only the shrine's return sequence gives
+/// control back. So that sequence still runs for them; its unlock does nothing by then.
+/// </summary>
+[HarmonyPatch(typeof(GetIsCrestUnlocked), nameof(GetIsCrestUnlocked.IsTrue), MethodType.Getter)]
+internal static class ShrineReturnPatch
+{
+    private const string ReturnGate = "door_memoryEnd";
+
+    private static void Postfix(GetIsCrestUnlocked __instance, ref bool __result)
     {
-        try
-        {
-            CollectableUIMsg.Spawn(item, Color.white);
-        }
-        catch (System.Exception e)
-        {
-            Core.Log.Exception("InventoryDomain.ShowPopup", e);
-        }
+        if (__result && __instance.State?.Name == "Check Unlocked" && GameManager.instance.entryGateName == ReturnGate) __result = false;
     }
 }
