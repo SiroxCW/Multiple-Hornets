@@ -46,6 +46,9 @@ internal static class PuppetActionFilter
         nameof(CollectableItemCollect), nameof(SavedItemGetV2), nameof(GetQuestReward), nameof(GetQuestRewardV2),
         nameof(EndQuest), nameof(EndQuestV2), nameof(TryEndQuest),
         nameof(PlayerDataIntAdd), nameof(IncrementPlayerDataInt), nameof(SetPlayerDataInt), nameof(AddScenesMapped),
+
+        // The owner dealt it already, what it did to the health arrives from there.
+        nameof(TakeDamage),
     };
 
     /// <summary>Flags that say what the hero may do right now, not what happened in the world.</summary>

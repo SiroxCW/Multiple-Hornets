@@ -59,6 +59,9 @@ internal sealed class FsmBinding
     /// </summary>
     public FsmState? OwnDecisionState { get; set; }
 
+    /// <summary>States a dead puppet went through, it plays out its death by itself.</summary>
+    public HashSet<FsmState> PlayedAfterDeath { get; } = new();
+
     public float OwnDecisionTime { get; set; }
     public int OwnDecisionCount { get; set; }
     public float LastOwnDecision { get; set; } = -100f;
@@ -121,6 +124,12 @@ internal sealed class Entity
     private const string HeroDeathEvent = "HORNET DEATH";
     private const string HeroDeadVariable = "Hornet Dead";
 
+    /// <summary>
+    /// Bosses built from parts: the health sits on one part (Fourth Chorus: the head, deep in the skeleton), while the
+    /// object above it decides the attacks and moves everything. That object is what has to follow the owner.
+    /// </summary>
+    private static readonly HashSet<string> BodyObjects = new() { "song_golem" };
+
     private readonly SnapshotInterpolator _interpolator = new();
     private RigidbodyType2D _storedBodyType;
     private bool _bodyStored;
@@ -139,9 +148,9 @@ internal sealed class Entity
         Health = health;
         GameObject = health.gameObject;
         Name = GameObject.name;
-        Transform = health.transform;
-        Body = health.GetComponent<Rigidbody2D>();
-        Sprite = health.GetComponent<tk2dBaseSprite>();
+        Transform = FindBody(health);
+        Body = Transform.GetComponent<Rigidbody2D>();
+        Sprite = Transform.GetComponent<tk2dBaseSprite>();
         _hitEffects = health.GetComponent<IHitEffectReciever>();
 
         // These move and animate an enemy by themselves, which on a puppet fights what the owner does.
@@ -150,10 +159,10 @@ internal sealed class Entity
         Movers.AddRange(health.GetComponents<WalkerV2>());
         Movers.AddRange(health.GetComponents<Climber>());
 
-        foreach (var animator in health.GetComponentsInChildren<tk2dSpriteAnimator>(true))
+        foreach (var animator in Transform.GetComponentsInChildren<tk2dSpriteAnimator>(true))
         {
             // Effects parented to the enemy at runtime differ between games, and nested enemies sync themselves.
-            if (animator.name.Contains("(Clone)") || animator.GetComponentInParent<HealthManager>(true) != health) continue;
+            if (animator.name.Contains("(Clone)") || BelongsToOtherEnemy(animator, health)) continue;
             if (IsPartOfCorpse(health, animator.transform)) continue;
             Animators.Add(animator);
         }
@@ -205,10 +214,10 @@ internal sealed class Entity
     {
         var entity = new Entity(id, health);
 
-        foreach (var fsm in health.GetComponentsInChildren<PlayMakerFSM>(true))
+        foreach (var fsm in entity.Transform.GetComponentsInChildren<PlayMakerFSM>(true))
         {
             // FSMs below a nested enemy belong to that enemy.
-            if (fsm.GetComponentInParent<HealthManager>(true) != health || fsm.Fsm == null) continue;
+            if (BelongsToOtherEnemy(fsm, health) || fsm.Fsm == null) continue;
             if (IsPartOfCorpse(health, fsm.transform) || IsMultiHit(fsm)) continue;
             entity.Fsms.Add(new FsmBinding(entity, entity.Fsms.Count, fsm));
         }
@@ -217,6 +226,22 @@ internal sealed class Entity
         entity.IsBossLike = health.hp >= 100 || health.bigEnemyDeath || lowerPath.Contains("boss");
         entity.LastRemoteUpdate = Time.realtimeSinceStartup;
         return entity;
+    }
+
+    private static Transform FindBody(HealthManager health)
+    {
+        for (var parent = health.transform.parent; parent; parent = parent.parent)
+        {
+            if (BodyObjects.Contains(parent.name)) return parent;
+        }
+
+        return health.transform;
+    }
+
+    private static bool BelongsToOtherEnemy(Component component, HealthManager health)
+    {
+        var nearest = component.GetComponentInParent<HealthManager>(true);
+        return nearest && nearest != health;
     }
 
     /// <summary>
@@ -415,6 +440,9 @@ internal sealed class Entity
         var target = states[stateIndex];
         if (!reenter && binding.Fsm.ActiveState == target) return;
 
+        // The owner's report of a state this death already passed would start that part over.
+        if (Health.isDead && binding.PlayedAfterDeath.Contains(target)) return;
+
         EnemySync.ForceSwitchState(binding.Fsm, target);
     }
 
@@ -539,7 +567,7 @@ internal sealed class Entity
         if (!Health.battleScene)
         {
             Health.isDead = true;
-            GameObject.SetActive(false);
+            Transform.gameObject.SetActive(false);
             if (IsBossLike) World.TriggerSync.ReleaseArena();
             return;
         }
@@ -635,7 +663,7 @@ internal sealed class Entity
     /// <summary>Puppet work that has to happen every frame before rendering.</summary>
     public void PuppetUpdate()
     {
-        if (RemovedDead && !Health.battleScene && GameObject.activeSelf) GameObject.SetActive(false);
+        if (RemovedDead && !Health.battleScene && Transform.gameObject.activeSelf) Transform.gameObject.SetActive(false);
 
         if (Health.isDead)
         {

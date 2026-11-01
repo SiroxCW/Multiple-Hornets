@@ -7,6 +7,25 @@ None of this has been tried in the game. I checked it against the game's code an
 - If something goes wrong, send me the room and roughly what time it happened. Put your friend's `session-*.log` in `debug-logs/`.
 - Room names below are the ones in the logs. "Owner" is the player the enemy is fighting. If you're unsure who that is, the log says `Enemy ... now belongs to`.
 
+## Fixes from your last test
+
+**Fourth Chorus (`Bone_East_08`)**
+- [ ] Both players see the same attack at the same time: the same slams, swipes and punches, and the same floor breaking. Try it once with each player as the one who starts the fight.
+- [ ] The head stays on the body for both of you and no longer floats somewhere else.
+- [ ] One player breaks one explosive wall at the top and the other player's copy goes off too. Do the second one with either player: the stone falls once for both, and nobody has to break anything twice.
+- [ ] The stone hurts the boss, whichever player's game owns it. It should die from the stone at the end.
+- [ ] Both of you see the whole death sequence and the floor returns for both. Afterwards nobody has a boss left in the room. If your boss stays again, send both logs: they now contain `Puppet SG_head <- Control/...` lines that show what the boss did on your side.
+
+**Reaper Crest (`Greymoor_20c`)**
+- [ ] The first player collects it: the other player's chat shows `<name> obtained the crest Reaper` (or however the game names it) and no error.
+- [ ] The second player stabs the shrine afterwards: the screen goes black, comes back, and they get the crest and control as normal.
+- [ ] Reload the room later: the shrine is gone for both.
+- [ ] Other crest shrines use the same sequence, so check the next one you find too.
+
+**Cocoon**
+- [ ] A cocoon floats a little above the floor, and freeing someone lands them on the floor, not through it. The last case was in `Greymoor_08`.
+- [ ] Also try a cocoon after dying to a hazard, and in a low passage.
+
 ## 1. Enemies no longer affect the other player's hero (most important)
 
 Each test has one player get grabbed or robbed while the other stands somewhere safe in the same room. The second player's hero should be completely unaffected: no damage, no lost control, no fading screen, no room change.
@@ -182,4 +201,3 @@ These are not bugs in this build, and I left them as they are on purpose:
 
 - **Act 3 is not shared.** Each player's story act is their own, because changing it means a respawn and a wake-up sequence that I don't want to force on someone mid-play. If only one player reaches Act 3, your rooms will differ. Tell me if you get that far and it's a problem.
 - **Steel Servant** (`bone_steel_servant`) now freezes before it captures the hero. I didn't confirm that its waves start the same way as other arenas.
-- **Lifts** still aren't shared.

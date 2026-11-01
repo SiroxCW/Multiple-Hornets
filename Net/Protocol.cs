@@ -8,7 +8,7 @@ internal static class Protocol
     /// <summary>
     /// Bumped whenever the wire format changes. Client and server must match exactly.
     /// </summary>
-    public const int Version = 8;
+    public const int Version = 9;
 
     public const string AppKey = "MultipleHornets";
     public const int DefaultPort = 26960;

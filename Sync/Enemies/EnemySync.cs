@@ -289,6 +289,7 @@ internal static class EnemySync
         if (FsmBindings.Count == 0 || !FsmBindings.TryGetValue(fsm, out var binding)) return;
 
         if (!_forcingState && state.Name == fsm.StartState) binding.StartFrame = Time.frameCount;
+        if (binding.Entity.IsPuppet && binding.Entity.Health.isDead) binding.PlayedAfterDeath.Add(state);
 
         if (!_audience || binding.Entity.IsPuppet) return;
 
@@ -326,7 +327,7 @@ internal static class EnemySync
 
         var hero = HeroController.SilentInstance;
         var heroPosition = hero ? (Vector2)hero.transform.position : (Vector2)entity.Transform.position;
-        var direction = extraDamage ? 0f : hit.GetActualDirection(entity.Transform, HitInstance.TargetType.Regular);
+        var direction = extraDamage ? 0f : hit.GetActualDirection(entity.Health.transform, HitInstance.TargetType.Regular);
 
         byte flags = 0;
         if (hit.IgnoreInvulnerable) flags |= RemoteHit.FlagIgnoreInvulnerable;
@@ -353,7 +354,7 @@ internal static class EnemySync
         if (!_audience) return;
 
         var body = BeginEvent(EventHitEffect, entity);
-        body.Put(hit.GetActualDirection(entity.Transform, HitInstance.TargetType.Regular));
+        body.Put(hit.GetActualDirection(entity.Health.transform, HitInstance.TargetType.Regular));
         body.Put((byte)hit.AttackType);
         body.Put(RemoteHit.Active ? entity.LastRemoteHitter : Session.LocalId);
     }

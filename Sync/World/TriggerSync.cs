@@ -43,6 +43,10 @@ internal static class TriggerSync
         new(new[] { "hunter trap plate" }, new[] { "Idle", "Cam Check" }, new[] { "Step" }),
         new(new[] { "dust trap spike plate" }, new[] { "Idle" }, new[] { "Step" }),
 
+        // These only count a hit when the hero stands next to them, so replaying a teammate's hit does nothing here.
+        // The rock Fourth Chorus dies to falls once two of them went off, and hurts the boss only in its owner's game.
+        new(new[] { "explode_wall" }, new[] { "Idle" }, new[] { "Strike" }),
+
         // Paying a toll retracts the machine. Without this the saved state makes it jump to the end for everyone else.
         new(new[] { "bell_toll_machine", "tube_toll_machine" },
             new[] { "Inert", "Prompt", "End Interaction", "Set Extra PD Bool" },
