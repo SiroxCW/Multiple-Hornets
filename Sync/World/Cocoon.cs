@@ -25,7 +25,7 @@ internal static class Cocoon
     private const float FreedInvulnerable = 2f;
     private const float HandOffInterval = 0.5f;
     private const float GroundRange = 40f;
-    private const float GroundOffset = 0.9f;
+    private const float RestingLift = 0.6f;
     private const int TerrainMask = 1 << (int)GlobalEnums.PhysLayers.TERRAIN;
 
     private static readonly Dictionary<ushort, CocoonView> Views = new();
@@ -182,14 +182,29 @@ internal static class Cocoon
     private static Vector2 FindRestingPlace(HeroController hero)
     {
         Vector2 from = hero.transform.position;
-        if (LastHazard is GlobalEnums.HazardType.ENEMY or GlobalEnums.HazardType.EXPLOSION && !Physics2D.OverlapPoint(from, TerrainMask))
+        var inTheOpen = LastHazard is GlobalEnums.HazardType.ENEMY or GlobalEnums.HazardType.EXPLOSION && !Physics2D.OverlapPoint(from, TerrainMask);
+        if (!inTheOpen || !TryFindGround(from, out var ground))
         {
-            var ground = Physics2D.Raycast(from, Vector2.down, GroundRange, TerrainMask);
-            if (ground.collider) return ground.point + Vector2.up * GroundOffset;
+            from = hero.playerData.hazardRespawnLocation;
+            if (!TryFindGround(from, out ground)) return from + Vector2.up * RestingLift;
         }
 
-        return hero.playerData.hazardRespawnLocation;
+        return Above(hero, ground);
     }
+
+    private static bool TryFindGround(Vector2 from, out Vector2 ground)
+    {
+        var hit = Physics2D.Raycast(from, Vector2.down, GroundRange, TerrainMask);
+        ground = hit.point;
+        return hit.collider;
+    }
+
+    /// <summary>
+    /// The hero falls from here once it is free. Starting with its collider inside the floor drops it through, so this
+    /// is above where it would stand, worked out the way the game does. Its collider is still on at this point.
+    /// </summary>
+    private static Vector2 Above(HeroController hero, Vector2 ground) =>
+        ground + Vector2.up * (hero.col2d.bounds.extents.y - hero.col2d.offset.y + RestingLift);
 
     private static void Free()
     {
